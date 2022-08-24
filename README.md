@@ -10,7 +10,9 @@ Linux with Wayland is not supported since the Wayland protocol is much more rest
 ### Dependencies
 
 On Ubuntu, the key dependencies can be installed with `apt-get install libxcb1 libxrandr2 libdbus-1-3`.
-Additionally, Rust is required.
+(See here for details: https://github.com/nashaofu/screenshots-rs)
+
+Additionally, Rust is required to build it.
 
 ### Usage
 
@@ -19,7 +21,7 @@ Govind Pimpale <gpimpale29@gmail.com>
 Takes periodic screenshots
 
 USAGE:
-    retroactive-time-tracking [OPTIONS] --dir <DIR>
+    time-tracker [OPTIONS] --dir <DIR>
 
 OPTIONS:
     -a, --afk-threshold <AFK_THRESHOLD>
@@ -36,7 +38,7 @@ OPTIONS:
             Interval in seconds between consecutive screenshots [default: 300]
 
     -n, --no-afk
-            Don't check whether the user is afk or not.
+            Don't check whether the user is afk or not
 
     -V, --version
             Print version information

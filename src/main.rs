@@ -19,7 +19,7 @@ struct Opts {
     dir: String,
     #[clap(long, short, default_value = "300", help="Interval in seconds between consecutive screenshots")]
     interval: u64,
-    #[clap(long, short, help="Don't check whether the user is afk or not.")]
+    #[clap(long, short, help="Don't check whether the user is afk or not")]
     no_afk: bool,
     #[clap(long, short, default_value = "300", help="Duration in seconds of no mouse or keyboard activity after which the user will be considered AFK")]
     afk_threshold: u64,

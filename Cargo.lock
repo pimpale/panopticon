@@ -446,16 +446,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be105c72a1e6a5a1198acee3d5b506a15676b74a02ecd78060042a447f408d94"
 
 [[package]]
-name = "retroactive-time-tracking"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "device_query",
- "screenshots",
-]
-
-[[package]]
 name = "screenshots"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -518,6 +508,16 @@ dependencies = [
  "libc",
  "wasi",
  "winapi",
+]
+
+[[package]]
+name = "time-tracker"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "device_query",
+ "screenshots",
 ]
 
 [[package]]
