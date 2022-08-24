@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use clap::Parser;
-use device_query::{device_state, DeviceEvents, DeviceState};
+use device_query::{DeviceEvents, DeviceState};
 use screenshots::Screen;
 use std::{
     fs,
@@ -10,27 +10,35 @@ use std::{
 };
 
 #[derive(Parser, Clone)]
+#[clap(name = "Retroactive Time Tracker")]
+#[clap(author = "Govind Pimpale <gpimpale29@gmail.com>")]
+#[clap(version = "0.1")]
+#[clap(about = "Takes periodic screenshots", long_about = None)]
 struct Opts {
-    #[clap(long)]
+    #[clap(long, short, help="Directory to store screenshots in")]
     dir: String,
-    #[clap(long)]
+    #[clap(long, short, default_value = "300", help="Interval in seconds between consecutive screenshots")]
     interval: u64,
-    #[clap(long)]
+    #[clap(long, short, help="Don't check whether the user is afk or not.")]
     no_afk: bool,
+    #[clap(long, short, default_value = "300", help="Duration in seconds of no mouse or keyboard activity after which the user will be considered AFK")]
+    afk_threshold: u64,
 }
 
-fn screenshot_all(dir: String, time: DateTime<Local>) {
+fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
     let screens = Screen::all().unwrap();
     for screen in screens {
         let image = screen.capture().unwrap();
         let buffer = image.buffer();
+        let dir = format!("{}/{}", base_dir, time.format("%Y-%m-%d"));
         fs::create_dir_all(&dir).unwrap();
         fs::write(
             format!(
-                "{}/{}_screen{}.png",
+                "{}/{}{}{}.png",
                 dir,
-                time.format("%Y-%m-%d_%H:%M:%S"),
-                screen.display_info.id
+                time.format("%H:%M:%S"),
+                format!("_screen-{}", screen.display_info.id),
+                if afk { "_[AFK]" } else { "" }
             ),
             &buffer,
         )
@@ -43,6 +51,7 @@ fn main() {
         dir,
         interval,
         no_afk,
+        afk_threshold,
     } = Opts::parse();
 
     // last interaction with computer
@@ -87,13 +96,17 @@ fn main() {
     }
 
     loop {
+        let afk = if no_afk {
+            false
+        } else {
+            last_interaction.lock().unwrap().elapsed().as_secs() > afk_threshold
+        };
+
         let dir = dir.clone();
         let time = Local::now();
         thread::spawn(move || {
-            screenshot_all(dir, time);
+            screenshot_all(dir, time, afk);
         });
-
-        println!("{:?}", last_interaction.lock().unwrap());
 
         thread::sleep(time::Duration::from_secs(interval));
     }
