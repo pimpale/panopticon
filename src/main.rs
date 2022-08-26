@@ -1,11 +1,12 @@
 use chrono::{DateTime, Local};
-use clap::Parser;
+use clap::{CommandFactory, ErrorKind, Parser};
+use rand::Rng;
 use screenshots::Screen;
 use std::{fs, thread, time};
 use user_idle::UserIdle;
 
 #[derive(Parser, Clone)]
-#[clap(name = "Retroactive Time Tracker")]
+#[clap(name = "panopticon-daemon")]
 #[clap(author = "Govind Pimpale <gpimpale29@gmail.com>")]
 #[clap(version = "0.1")]
 #[clap(about = "Takes periodic screenshots", long_about = None)]
@@ -15,16 +16,23 @@ struct Opts {
     #[clap(
         long,
         short,
-        default_value = "300",
-        help = "Interval in seconds between consecutive screenshots"
+        default_value = "60",
+        help = "Interval in seconds between screenshots"
     )]
-    interval: u64,
+    interval: f32,
+    #[clap(
+        long,
+        short,
+        default_value = "0",
+        help = "Seconds of jitter to add to the screenshot time. Must be less than or equal to interval."
+    )]
+    jitter: f32,
     #[clap(long, short, help = "Don't check whether the user is afk or not")]
     no_afk: bool,
     #[clap(
         long,
         short,
-        default_value = "300",
+        default_value = "60",
         help = "Duration in seconds of no mouse or keyboard activity after which the user will be considered AFK"
     )]
     afk_threshold: u64,
@@ -55,23 +63,39 @@ fn main() {
     let Opts {
         dir,
         interval,
+        jitter,
         no_afk,
         afk_threshold,
     } = Opts::parse();
 
+    if interval <= 0.0 {
+        let mut cmd = Opts::command();
+        cmd.error(ErrorKind::InvalidValue, "interval must be greater than 0")
+            .exit();
+    }
+
+    if jitter > interval {
+        let mut cmd = Opts::command();
+        cmd.error(
+            ErrorKind::InvalidValue,
+            "jitter must be less than or equal to interval",
+        )
+        .exit();
+    }
+
+    let mut rng = rand::thread_rng();
+
     loop {
+        let delay = jitter * rng.gen::<f32>();
+        thread::sleep(time::Duration::from_secs_f32(delay));
+
         let afk = if no_afk {
             false
         } else {
             UserIdle::get_time().unwrap().as_seconds() > afk_threshold
         };
+        screenshot_all(dir.clone(), Local::now(), afk);
 
-        let dir = dir.clone();
-        let time = Local::now();
-        thread::spawn(move || {
-            screenshot_all(dir, time, afk);
-        });
-
-        thread::sleep(time::Duration::from_secs(interval));
+        thread::sleep(time::Duration::from_secs_f32(interval - delay));
     }
 }
