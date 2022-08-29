@@ -1,4 +1,4 @@
-# Retroactive Time Tracker
+# Panopticon
 
 This command line application takes periodic screenshots of your screen, and saves them in the folder specified.
 
@@ -17,16 +17,17 @@ Additionally, Rust is required to build it.
 ### Usage
 
 ```
+panopticon 0.1
 Govind Pimpale <gpimpale29@gmail.com>
 Takes periodic screenshots
 
 USAGE:
-    time-tracker [OPTIONS] --dir <DIR>
+    panopticon [OPTIONS] --dir <DIR>
 
 OPTIONS:
     -a, --afk-threshold <AFK_THRESHOLD>
             Duration in seconds of no mouse or keyboard activity after which the user will be
-            considered AFK [default: 300]
+            considered AFK [default: 60]
 
     -d, --dir <DIR>
             Directory to store screenshots in
@@ -35,11 +36,14 @@ OPTIONS:
             Print help information
 
     -i, --interval <INTERVAL>
-            Interval in seconds between consecutive screenshots [default: 300]
+            Interval in seconds between screenshots [default: 60]
+
+    -j, --jitter <JITTER>
+            Seconds of jitter to add to the screenshot time. Must be less than or equal to interval.
+            [default: 0]
 
     -n, --no-afk
             Don't check whether the user is afk or not
 
     -V, --version
-            Print version information
-```
+            Print version information```

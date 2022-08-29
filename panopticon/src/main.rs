@@ -6,7 +6,7 @@ use std::{fs, thread, time};
 use user_idle::UserIdle;
 
 #[derive(Parser, Clone)]
-#[clap(name = "panopticon-daemon")]
+#[clap(name = "panopticon")]
 #[clap(author = "Govind Pimpale <gpimpale29@gmail.com>")]
 #[clap(version = "0.1")]
 #[clap(about = "Takes periodic screenshots", long_about = None)]
