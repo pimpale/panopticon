@@ -11,30 +11,19 @@ use user_idle::UserIdle;
 #[clap(version = "0.1")]
 #[clap(about = "Takes periodic screenshots", long_about = None)]
 struct Opts {
-    #[clap(long, short, help = "Directory to store screenshots in")]
+    /// Target directory to store screenshots in
     dir: String,
-    #[clap(
-        long,
-        short,
-        default_value = "60",
-        help = "Interval in seconds between screenshots"
-    )]
+    /// Interval in seconds between screenshots
+    #[clap(long, short, default_value = "60")]
     interval: f32,
-    #[clap(
-        long,
-        short,
-        default_value = "0",
-        help = "Seconds of jitter to add to the screenshot time. Must be less than or equal to interval."
-    )]
+    /// Seconds of jitter to add to the screenshot time. Must be less than or equal to interval.
+    #[clap(long, short, default_value = "0")]
     jitter: f32,
-    #[clap(long, short, help = "Don't check whether the user is afk or not")]
+    /// Don't check whether the user is afk or not
+    #[clap(long, short)]
     no_afk: bool,
-    #[clap(
-        long,
-        short,
-        default_value = "60",
-        help = "Duration in seconds of no mouse or keyboard activity after which the user will be considered AFK"
-    )]
+    /// Duration in seconds of no mouse or keyboard activity after which the user will be considered AFK
+    #[clap(long, short, default_value = "60")]
     afk_threshold: u64,
 }
 
