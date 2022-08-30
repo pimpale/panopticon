@@ -11,4 +11,4 @@ clap = { version="3.2.18", features=["derive"]}
 eframe = "0.19.0"
 ics = "0.5.7"
 image = "0.24.3"
-nom = "7.1.1"
+sscanf = "0.3.1"
