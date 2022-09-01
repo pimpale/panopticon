@@ -1,14 +1,13 @@
+#![feature(map_first_last)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
-use sscanf::lazy_static::lazy::Lazy;
 use sscanf::scanf;
 use std::collections::HashSet;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
-use std::path::PathBuf;
 
 mod lazy_image;
 use lazy_image::LazyImage;
@@ -26,7 +25,7 @@ struct Opts {
 fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     let Opts { dir } = Opts::parse();
 
-    let mut snapshots = vec![];
+    let mut snapshots = BTreeMap::new();
 
     // parse each day folder
     for maybe_day_path in fs::read_dir(dir)? {
@@ -42,34 +41,46 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
             let afk = afk_str == "_AFK.png";
 
             // get real time
-            let time = Local
+            let time = match Local
                 .from_local_datetime(&day.and_time(NaiveTime::parse_from_str(hms, "%H:%M:%S")?))
-                .unwrap();
+            {
+                chrono::LocalResult::None => Err(format!(
+                    "No valid time corresponds to path {:?}/{:?}",
+                    day_path.file_name().to_string_lossy(),
+                    snapshot_path.file_name().to_string_lossy()
+                ))?,
+                chrono::LocalResult::Single(t) => t,
+                chrono::LocalResult::Ambiguous(t, _) => t,
+            };
 
-            snapshots.push((time, screen, afk, snapshot_path.path()));
+            // create image
+            let lazy_image = LazyImage::new(snapshot_path.path());
+            match snapshots.entry(time) {
+                Entry::Vacant(x) => {
+                    x.insert(Snapshot {
+                        screenshots: BTreeMap::from([(screen, lazy_image)]),
+                        afk,
+                    });
+                }
+                Entry::Occupied(mut x) => {
+                    x.get_mut().screenshots.insert(screen, lazy_image);
+                }
+            }
         }
     }
 
-    let options = eframe::NativeOptions::default();
     eframe::run_native(
         "panopticon-ics",
-        options,
+        eframe::NativeOptions::default(),
         Box::new(|_| {
+            // get the earliest time listed or now
+            let current_time = snapshots
+                .first_key_value()
+                .map(|x| x.0.clone())
+                .unwrap_or(Local::now());
             Box::new(MyApp {
-                snapshots: snapshots.into_iter().fold(
-                    HashMap::new(),
-                    |mut acc, (dt, screen, afk, path)| match acc.entry(dt) {
-                        Entry::Vacant(x) => {
-                            let screenshots = HashMap::from([(screen, LazyImage::new(path))]);
-                            x.insert(Snapshot { screenshots, afk });
-                            acc
-                        }
-                        Entry::Occupied(x) => {
-                            x.get_mut().screenshots.insert(screen, LazyImage::new(path));
-                            acc
-                        }
-                    },
-                ),
+                current_time,
+                snapshots,
             })
         }),
     );
@@ -79,21 +90,35 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
 
 struct Snapshot {
     // TODO: use more images
-    screenshots: HashMap<u64, LazyImage>,
+    screenshots: BTreeMap<u64, LazyImage>,
     afk: bool,
 }
 
 struct MyApp {
-    snapshots: HashMap<DateTime<Local>, Snapshot>,
+    snapshots: BTreeMap<DateTime<Local>, Snapshot>,
+    current_time: DateTime<Local>,
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+
+        egui::SidePanel::left("Calendar").show(ctx, |ui| {
+            ui.heading("My egui Application");
+        });
+
+       let current_snapshot = self.snapshots.range_mut(self.current_time..).next();
+
+        egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
+            ui.heading("My egui Application");
+        });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
-            for (k, snapshot) in self.snapshots.iter_mut() {
-                let img = snapshot.screenshot.get_texture();
-                img.show_max_size(ui, ui.available_size());
+            if let Some((time, snapshot)) = current_snapshot {
+                if let Some(mut entry) = snapshot.screenshots.first_entry() {
+                    let img = entry.get_mut().get_texture();
+                    img.show_max_size(ui, ui.available_size());
+                }
             }
         });
     }
