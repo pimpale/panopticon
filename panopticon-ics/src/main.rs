@@ -1,6 +1,9 @@
 #![feature(map_first_last)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod lazy_image;
+mod timeline_widget;
+
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
@@ -9,8 +12,8 @@ use std::collections::HashSet;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
 
-mod lazy_image;
 use lazy_image::LazyImage;
+use timeline_widget::TimelineWidget;
 
 #[derive(Parser, Clone)]
 #[clap(name = "panopticon-ics")]
@@ -79,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 .map(|x| x.0.clone())
                 .unwrap_or(Local::now());
             Box::new(MyApp {
+                zoom_multipler: 1,
                 current_time,
                 snapshots,
             })
@@ -89,7 +93,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
 }
 
 struct Snapshot {
-    // TODO: use more images
     screenshots: BTreeMap<u64, LazyImage>,
     afk: bool,
 }
@@ -97,28 +100,40 @@ struct Snapshot {
 struct MyApp {
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
+    zoom_multipler: i32,
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         egui::SidePanel::left("Calendar").show(ctx, |ui| {
-            ui.heading("My egui Application");
+            ui.heading("Calendar");
+            ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.add(TimelineWidget::new(
+                    self.zoom_multipler as f32,
+                    self.current_time,
+                    self.snapshots.keys().cloned(),
+                ))
+            });
         });
 
-       let current_snapshot = self.snapshots.range_mut(self.current_time..).next();
+        let current_snapshot = self.snapshots.range_mut(self.current_time..).next();
 
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
             ui.heading("My egui Application");
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
             if let Some((time, snapshot)) = current_snapshot {
-                if let Some(mut entry) = snapshot.screenshots.first_entry() {
-                    let img = entry.get_mut().get_texture();
-                    img.show_max_size(ui, ui.available_size());
-                }
+                // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
+                egui::ScrollArea::vertical()
+                    .always_show_scroll(true)
+                    .show(ui, |ui| {
+                        for lazy_img in snapshot.screenshots.values_mut() {
+                            let img = lazy_img.get_texture();
+                            img.show_max_size(ui, [ui.available_width(), f32::INFINITY].into());
+                        }
+                    });
             }
         });
     }
