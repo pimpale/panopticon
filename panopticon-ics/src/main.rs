@@ -100,17 +100,17 @@ struct Snapshot {
 struct MyApp {
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
-    zoom_multipler: i32,
+    zoom_multipler: u32,
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("Calendar").show(ctx, |ui| {
+        egui::SidePanel::left("Calendar").resizable(false).show(ctx, |ui| {
             ui.heading("Calendar");
             ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add(TimelineWidget::new(
-                    self.zoom_multipler as f32,
+                    self.zoom_multipler,
                     self.current_time,
                     self.snapshots.keys().cloned(),
                 ))

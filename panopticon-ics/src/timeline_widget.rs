@@ -5,13 +5,13 @@ use std::collections::BTreeSet;
 const BASE_PIXELS_PER_HOUR: f32 = 50.0;
 
 pub struct TimelineWidget {
-    zoom_multipler: f32,
+    zoom_multipler: u32,
     now: DateTime<Local>,
     times: BTreeSet<DateTime<Local>>,
 }
 
 impl TimelineWidget {
-    pub fn new<I>(zoom_multipler: f32, now: DateTime<Local>, times: I) -> Self
+    pub fn new<I>(zoom_multipler: u32, now: DateTime<Local>, times: I) -> Self
     where
         I: IntoIterator<Item = DateTime<Local>>,
     {
@@ -52,7 +52,7 @@ impl egui::Widget for TimelineWidget {
         let (response, painter) = ui.allocate_painter(
             egui::Vec2 {
                 x: 200.0,
-                y: self.zoom_multipler * (last_hour - first_hour).num_hours() as f32 * BASE_PIXELS_PER_HOUR,
+                y: self.zoom_multipler as f32 * (last_hour - first_hour).num_hours() as f32 * BASE_PIXELS_PER_HOUR,
             },
             egui::Sense::click_and_drag(),
         );
@@ -72,29 +72,34 @@ impl egui::Widget for TimelineWidget {
             widget_visuals.bg_fill.linear_multiply(alpha * 0.8),
         );
 
-        let c = time_mark_region.center();
-        let r = time_mark_region.width() / 2.0 - 1.0;
-        let color = egui::epaint::Color32::from_gray(128);
-        let stroke = egui::Stroke::new(1.0, color);
-        painter.circle_stroke(c, r, stroke);
+        // decide on time increment based on zoom level
+        let time_increment = match self.zoom_multipler {
+            1..=4 => Duration::hours(1),
+            5..=9 => Duration::minutes(15),
+            10..=49 => Duration::minutes(5),
+            50..=100 => Duration::minutes(1),
+            _ => Duration::seconds(1),
+        };
 
         let mut current_time = first_hour.clone();
 
-        while current_time < last_hour {
+        while current_time <= last_hour {
             println!("{}", current_time.format("%m/%d %H:%M:%S"));
-            let y = (current_time - first_hour).num_hours() as f32 * BASE_PIXELS_PER_HOUR * self.zoom_multipler;
-            let x = time_mark_region.center().x;
+            let left_top = time_mark_region.left_top();
+            let x = left_top.x;
+            let hours = (current_time - first_hour).num_seconds() as f32 / 60.0 / 60.0;
+            let y = left_top.y + hours * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
 
             let text = current_time.format("%m/%d %H:%M:%S");
             painter.text(
                 egui::epaint::pos2(x, y),
-                egui::Align2::CENTER_CENTER,
+                egui::Align2::LEFT_TOP,
                 text,
                 egui::TextStyle::Monospace.resolve(ui.style()),
-                widget_visuals.text_color().linear_multiply(alpha),
+                widget_visuals.text_color(),
             );
 
-            current_time += Duration::hours(1);
+            current_time += time_increment;
         }
 
         return response;
