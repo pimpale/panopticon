@@ -6,19 +6,19 @@ const BASE_PIXELS_PER_HOUR: f32 = 50.0;
 
 pub struct TimelineWidget {
     zoom_multipler: u32,
-    now: DateTime<Local>,
+    selected_time: DateTime<Local>,
     times: BTreeSet<DateTime<Local>>,
 }
 
 impl TimelineWidget {
-    pub fn new<I>(zoom_multipler: u32, now: DateTime<Local>, times: I) -> Self
+    pub fn new<I>(zoom_multipler: u32, selected_time: DateTime<Local>, times: I) -> Self
     where
         I: IntoIterator<Item = DateTime<Local>>,
     {
         TimelineWidget {
             zoom_multipler,
             times: times.into_iter().collect(),
-            now,
+            selected_time,
         }
     }
 }
@@ -30,29 +30,30 @@ impl egui::Widget for TimelineWidget {
             .times
             .first()
             .cloned()
-            .unwrap_or(self.now)
+            .unwrap_or(self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap();
         let last_hour = self
             .times
             .last()
             .cloned()
-            .unwrap_or(self.now)
+            .unwrap_or(self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap()
             + Duration::hours(1);
 
-        println!(
-            "{:?} {:?} {:?}",
-            first_hour,
-            last_hour,
-            (last_hour - first_hour).num_hours()
-        );
+        // computes the pixel offset in this component for a given time
+        let get_y_offset = |time: DateTime<Local>| {
+            let hours = (time - first_hour).num_seconds() as f32 / 60.0 / 60.0;
+            return hours * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
+        };
 
         let (response, painter) = ui.allocate_painter(
             egui::Vec2 {
                 x: 200.0,
-                y: self.zoom_multipler as f32 * (last_hour - first_hour).num_hours() as f32 * BASE_PIXELS_PER_HOUR,
+                y: self.zoom_multipler as f32
+                    * (last_hour - first_hour).num_hours() as f32
+                    * BASE_PIXELS_PER_HOUR,
             },
             egui::Sense::click_and_drag(),
         );
@@ -66,6 +67,7 @@ impl egui::Widget for TimelineWidget {
         let visuals = ui.style().visuals.clone();
         let widget_visuals = ui.style().noninteractive();
 
+        // paint background rect
         painter.rect_filled(
             time_mark_region.shrink(visuals.clip_rect_margin),
             widget_visuals.rounding.ne,
@@ -84,22 +86,48 @@ impl egui::Widget for TimelineWidget {
         let mut current_time = first_hour.clone();
 
         while current_time <= last_hour {
-            println!("{}", current_time.format("%m/%d %H:%M:%S"));
-            let left_top = time_mark_region.left_top();
-            let x = left_top.x;
-            let hours = (current_time - first_hour).num_seconds() as f32 / 60.0 / 60.0;
-            let y = left_top.y + hours * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
+            let y_offset = get_y_offset(current_time);
 
-            let text = current_time.format("%m/%d %H:%M:%S");
+            painter.hline(
+                time_mark_region.left()..=time_mark_region.right(),
+                time_mark_region.top() + y_offset,
+                widget_visuals.bg_stroke,
+            );
+
             painter.text(
-                egui::epaint::pos2(x, y),
+                egui::epaint::pos2(
+                    time_mark_region.left(),
+                    time_mark_region.top() + y_offset + 2.0,
+                ),
                 egui::Align2::LEFT_TOP,
-                text,
-                egui::TextStyle::Monospace.resolve(ui.style()),
+                current_time.format("%m/%d %H:%M:%S"),
+                egui::TextStyle::Small.resolve(ui.style()),
                 widget_visuals.text_color(),
             );
 
             current_time += time_increment;
+        }
+
+        // paint event markers
+        {
+            let event_marker_x_offset = 75.0;
+
+            // draw all snapshot times
+            for snapshot_time in self.times.iter().cloned() {
+                let y_offset = get_y_offset(snapshot_time);
+
+                painter.hline(
+                    (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
+                    time_mark_region.top() + y_offset,
+                    widget_visuals.fg_stroke,
+                );
+            }
+            // paint current_time marker
+            painter.hline(
+                (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
+                time_mark_region.top() + get_y_offset(self.selected_time),
+                egui::Stroke::new(1.0, egui::Color32::RED),
+            );
         }
 
         return response;

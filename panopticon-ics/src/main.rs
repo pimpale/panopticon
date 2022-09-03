@@ -8,9 +8,9 @@ use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
 use sscanf::scanf;
-use std::collections::HashSet;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
+use std::ops::Bound::{Excluded, Unbounded};
 
 use lazy_image::LazyImage;
 use timeline_widget::TimelineWidget;
@@ -105,33 +105,77 @@ struct MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("Calendar").resizable(false).show(ctx, |ui| {
-            ui.heading("Calendar");
-            ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.add(TimelineWidget::new(
-                    self.zoom_multipler,
-                    self.current_time,
-                    self.snapshots.keys().cloned(),
-                ))
+        egui::SidePanel::left("Calendar")
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.heading("Calendar");
+                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.add(TimelineWidget::new(
+                        self.zoom_multipler,
+                        self.current_time,
+                        self.snapshots.keys().cloned(),
+                    ))
+                });
             });
+
+        let focused = false;
+
+        egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
+            ui.heading("Panopticon ICS");
+            ui.collapsing("Controls", |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("- ").strong());
+                    ui.label(egui::RichText::new("<Up>").code());
+                    ui.label("view previous snapshot");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("- ").strong());
+                    ui.label(egui::RichText::new("<Down>").code());
+                    ui.label("view next snapshot");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("- ").strong());
+                    ui.label(egui::RichText::new("<Enter>").code());
+                    ui.label("commit classification");
+                });
+            });
+
+            if ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
+            {
+                self.current_time = self
+                    .snapshots
+                    .range((Unbounded, Excluded(self.current_time)))
+                    .next_back()
+                    .map(|(x, _)| x.clone())
+                    .unwrap_or(self.current_time);
+            }
+            if ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
+            {
+                self.current_time = self
+                    .snapshots
+                    .range((Excluded(self.current_time), Unbounded))
+                    .next()
+                    .map(|(x, _)| x.clone())
+                    .unwrap_or(self.current_time);
+            }
         });
 
         let current_snapshot = self.snapshots.range_mut(self.current_time..).next();
-
-        egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
-            ui.heading("My egui Application");
-        });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if let Some((time, snapshot)) = current_snapshot {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
                     .always_show_scroll(true)
+                    .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for lazy_img in snapshot.screenshots.values_mut() {
-                            let img = lazy_img.get_texture();
-                            img.show_max_size(ui, [ui.available_width(), f32::INFINITY].into());
+                            lazy_img.show_max_size(ui, [ui.available_width(), f32::INFINITY].into());
                         }
                     });
             }
