@@ -21,10 +21,8 @@ impl TimelineWidget {
             selected_time,
         }
     }
-}
 
-impl egui::Widget for TimelineWidget {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+    fn draw_in_viewport(&self, ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
         // calculate first hour to display
         let first_hour = self
             .times
@@ -42,10 +40,16 @@ impl egui::Widget for TimelineWidget {
             .unwrap()
             + Duration::hours(1);
 
-        // computes the pixel offset in this component for a given time
+        // computes the pixel y_offset in this component for a given time
         let get_y_offset = |time: DateTime<Local>| {
             let hours = (time - first_hour).num_seconds() as f32 / 60.0 / 60.0;
             return hours * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
+        };
+
+        // computes the time for a given in this component for a given pixel y_offset
+        let get_time = |y_offset: f32| {
+            let hours_offset = y_offset / (BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32);
+            return first_hour + Duration::seconds((hours_offset * 60.0 * 60.0) as i64);
         };
 
         let (response, painter) = ui.allocate_painter(
@@ -60,19 +64,7 @@ impl egui::Widget for TimelineWidget {
 
         let time_mark_region = response.rect;
 
-        println!("{:?}", time_mark_region);
-
-        let alpha = 1.0;
-
-        let visuals = ui.style().visuals.clone();
         let widget_visuals = ui.style().noninteractive();
-
-        // paint background rect
-        painter.rect_filled(
-            time_mark_region.shrink(visuals.clip_rect_margin),
-            widget_visuals.rounding.ne,
-            widget_visuals.bg_fill.linear_multiply(alpha * 0.8),
-        );
 
         // decide on time increment based on zoom level
         let time_increment = match self.zoom_multipler {
@@ -83,29 +75,36 @@ impl egui::Widget for TimelineWidget {
             _ => Duration::seconds(1),
         };
 
-        let mut current_time = first_hour.clone();
+        let first_visible_time = get_time(rect.top());
+        let last_visible_time = get_time(rect.bottom());
 
-        while current_time <= last_hour {
-            let y_offset = get_y_offset(current_time);
+        // paint hlines and labels
+        {
+            // get first visible hline
+            let mut current_time = first_visible_time.duration_trunc(time_increment).unwrap();
 
-            painter.hline(
-                time_mark_region.left()..=time_mark_region.right(),
-                time_mark_region.top() + y_offset,
-                widget_visuals.bg_stroke,
-            );
+            while current_time <= last_visible_time {
+                let y_offset = get_y_offset(current_time);
 
-            painter.text(
-                egui::epaint::pos2(
-                    time_mark_region.left(),
-                    time_mark_region.top() + y_offset + 2.0,
-                ),
-                egui::Align2::LEFT_TOP,
-                current_time.format("%m/%d %H:%M:%S"),
-                egui::TextStyle::Small.resolve(ui.style()),
-                widget_visuals.text_color(),
-            );
+                painter.hline(
+                    time_mark_region.left()..=time_mark_region.right(),
+                    time_mark_region.top() + y_offset,
+                    widget_visuals.bg_stroke,
+                );
 
-            current_time += time_increment;
+                painter.text(
+                    egui::epaint::pos2(
+                        time_mark_region.left(),
+                        time_mark_region.top() + y_offset + 2.0,
+                    ),
+                    egui::Align2::LEFT_TOP,
+                    current_time.format("%m/%d %H:%M:%S"),
+                    egui::TextStyle::Small.resolve(ui.style()),
+                    widget_visuals.text_color(),
+                );
+
+                current_time += time_increment;
+            }
         }
 
         // paint event markers
@@ -113,7 +112,11 @@ impl egui::Widget for TimelineWidget {
             let event_marker_x_offset = 75.0;
 
             // draw all snapshot times
-            for snapshot_time in self.times.iter().cloned() {
+            for snapshot_time in self
+                .times
+                .range(first_visible_time..=last_visible_time)
+                .cloned()
+            {
                 let y_offset = get_y_offset(snapshot_time);
 
                 painter.hline(
@@ -131,5 +134,14 @@ impl egui::Widget for TimelineWidget {
         }
 
         return response;
+    }
+}
+
+impl egui::Widget for TimelineWidget {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        return egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show_viewport(ui, |ui, rect| self.draw_in_viewport(ui, rect))
+            .inner;
     }
 }

@@ -108,38 +108,61 @@ impl eframe::App for MyApp {
         egui::SidePanel::left("Calendar")
             .resizable(false)
             .show(ctx, |ui| {
-                ui.heading("Calendar");
-                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.add(TimelineWidget::new(
-                        self.zoom_multipler,
-                        self.current_time,
-                        self.snapshots.keys().cloned(),
-                    ))
+                ui.heading("Panopticon ICS");
+
+                ui.collapsing("Controls", |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new("- ").strong());
+                        ui.label(egui::RichText::new("<Up>").code());
+                        ui.label("view previous snapshot");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new("- ").strong());
+                        ui.label(egui::RichText::new("<Down>").code());
+                        ui.label("view next snapshot");
+                    });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new("- ").strong());
+                        ui.label(egui::RichText::new("<Enter>").code());
+                        ui.label("commit classification");
+                    });
                 });
+                ui.heading("Calendar ");
+                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+
+                ui.add(TimelineWidget::new(
+                    self.zoom_multipler,
+                    self.current_time,
+                    self.snapshots.keys().cloned(),
+                ))
             });
 
         let focused = false;
 
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
-            ui.heading("Panopticon ICS");
-            ui.collapsing("Controls", |ui| {
+            // this draws the actual labeler
+            if let Some((time, afk)) = self
+                .snapshots
+                .range(self.current_time..)
+                .next()
+                .map(|(time, snapshot)| (time.clone(), snapshot.afk))
+            {
+                // put other flags here
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("- ").strong());
-                    ui.label(egui::RichText::new("<Up>").code());
-                    ui.label("view previous snapshot");
+                    ui.heading(time.format("%Y-%m-%d %H:%M:%S").to_string());
+                    ui.add_space(20.0);
+                    if afk {
+                        ui.label(
+                            egui::RichText::new("AFK")
+                                .color(egui::Color32::BLACK)
+                                .background_color(egui::Color32::YELLOW)
+                                .heading(),
+                        );
+                    }
                 });
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("- ").strong());
-                    ui.label(egui::RichText::new("<Down>").code());
-                    ui.label("view next snapshot");
-                });
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(egui::RichText::new("- ").strong());
-                    ui.label(egui::RichText::new("<Enter>").code());
-                    ui.label("commit classification");
-                });
-            });
+
+                ui.separator();
+            }
 
             if ui
                 .input_mut()
@@ -165,17 +188,16 @@ impl eframe::App for MyApp {
             }
         });
 
-        let current_snapshot = self.snapshots.range_mut(self.current_time..).next();
-
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some((time, snapshot)) = current_snapshot {
+            if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
                     .always_show_scroll(true)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for lazy_img in snapshot.screenshots.values_mut() {
-                            lazy_img.show_max_size(ui, [ui.available_width(), f32::INFINITY].into());
+                            lazy_img
+                                .show_max_size(ui, [ui.available_width(), f32::INFINITY].into());
                         }
                     });
             }
