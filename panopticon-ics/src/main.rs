@@ -156,31 +156,6 @@ impl eframe::App for MyApp {
 
                 ui.separator();
             }
-
-            if ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
-            {
-                if let Some(previous) = self
-                    .timeline_widget
-                    .previous_data_point_mut()
-                    .map(|x| x.0.clone())
-                {
-                    *self.timeline_widget.selected_time_mut() = previous;
-                }
-            }
-            if ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
-            {
-                if let Some(next) = self
-                    .timeline_widget
-                    .next_data_point_mut()
-                    .map(|x| x.0.clone())
-                {
-                    *self.timeline_widget.selected_time_mut() = next;
-                }
-            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
