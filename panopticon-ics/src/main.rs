@@ -10,7 +10,6 @@ use eframe::egui;
 use sscanf::scanf;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
-use std::ops::Bound::{Excluded, Unbounded};
 
 use lazy_image::LazyImage;
 use timeline_widget::TimelineWidget;
@@ -81,10 +80,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 .first_key_value()
                 .map(|x| x.0.clone())
                 .unwrap_or(Local::now());
+
             Box::new(MyApp {
-                zoom_multipler: 1,
-                current_time,
-                snapshots,
+                timeline_widget: TimelineWidget::new(1, current_time, snapshots),
             })
         }),
     );
@@ -98,9 +96,7 @@ struct Snapshot {
 }
 
 struct MyApp {
-    snapshots: BTreeMap<DateTime<Local>, Snapshot>,
-    current_time: DateTime<Local>,
-    zoom_multipler: u32,
+    timeline_widget: TimelineWidget<Snapshot>,
 }
 
 impl eframe::App for MyApp {
@@ -128,13 +124,11 @@ impl eframe::App for MyApp {
                     });
                 });
                 ui.heading("Calendar ");
-                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
-
-                ui.add(TimelineWidget::new(
-                    self.zoom_multipler,
-                    self.current_time,
-                    self.snapshots.keys().cloned(),
-                ))
+                ui.add(
+                    egui::Slider::new(self.timeline_widget.zoom_multipler_mut(), 1..=100)
+                        .text("Zoom"),
+                );
+                ui.add(&mut self.timeline_widget);
             });
 
         let focused = false;
@@ -142,9 +136,8 @@ impl eframe::App for MyApp {
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
             // this draws the actual labeler
             if let Some((time, afk)) = self
-                .snapshots
-                .range(self.current_time..)
-                .next()
+                .timeline_widget
+                .adjacent_data_point_mut()
                 .map(|(time, snapshot)| (time.clone(), snapshot.afk))
             {
                 // put other flags here
@@ -168,28 +161,30 @@ impl eframe::App for MyApp {
                 .input_mut()
                 .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
             {
-                self.current_time = self
-                    .snapshots
-                    .range((Unbounded, Excluded(self.current_time)))
-                    .next_back()
-                    .map(|(x, _)| x.clone())
-                    .unwrap_or(self.current_time);
+                if let Some(previous) = self
+                    .timeline_widget
+                    .previous_data_point_mut()
+                    .map(|x| x.0.clone())
+                {
+                    *self.timeline_widget.selected_time_mut() = previous;
+                }
             }
             if ui
                 .input_mut()
                 .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
             {
-                self.current_time = self
-                    .snapshots
-                    .range((Excluded(self.current_time), Unbounded))
-                    .next()
-                    .map(|(x, _)| x.clone())
-                    .unwrap_or(self.current_time);
+                if let Some(next) = self
+                    .timeline_widget
+                    .next_data_point_mut()
+                    .map(|x| x.0.clone())
+                {
+                    *self.timeline_widget.selected_time_mut() = next;
+                }
             }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
+            if let Some((_, snapshot)) = self.timeline_widget.adjacent_data_point_mut() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
                     .always_show_scroll(true)

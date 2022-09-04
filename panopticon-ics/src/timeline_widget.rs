@@ -1,40 +1,76 @@
 use chrono::{DateTime, Duration, DurationRound, Local};
 use eframe::egui;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
+use std::ops::Bound::{Excluded, Unbounded};
 
 const BASE_PIXELS_PER_HOUR: f32 = 50.0;
 
-pub struct TimelineWidget {
+pub struct TimelineWidget<T> {
     zoom_multipler: u32,
     selected_time: DateTime<Local>,
-    times: BTreeSet<DateTime<Local>>,
+    data_points: BTreeMap<DateTime<Local>, T>,
 }
 
-impl TimelineWidget {
-    pub fn new<I>(zoom_multipler: u32, selected_time: DateTime<Local>, times: I) -> Self
-    where
-        I: IntoIterator<Item = DateTime<Local>>,
-    {
+impl<T> TimelineWidget<T> {
+    pub fn new(
+        zoom_multipler: u32,
+        selected_time: DateTime<Local>,
+        data_points: BTreeMap<DateTime<Local>, T>,
+    ) -> Self {
         TimelineWidget {
             zoom_multipler,
-            times: times.into_iter().collect(),
+            data_points,
             selected_time,
         }
+    }
+
+    pub fn data_points_mut(&mut self) -> &mut BTreeMap<DateTime<Local>, T> {
+        &mut self.data_points
+    }
+
+    // returns the entry of the adjacent data point (if exists)
+    pub fn adjacent_data_point_mut<'a>(&'a mut self) -> Option<(&'a DateTime<Local>, &'a mut T)> {
+        self.data_points.range_mut(self.selected_time..).next()
+    }
+
+    // returns the entry of the next data point (if exists)
+    pub fn next_data_point_mut<'a>(&'a mut self) -> Option<(&'a DateTime<Local>, &'a mut T)> {
+        self.data_points
+            .range_mut((Excluded(self.selected_time), Unbounded))
+            .next()
+    }
+
+    // returns the entry of the previous data point (if exists)
+    pub fn previous_data_point_mut<'a>(&'a mut self) -> Option<(&'a DateTime<Local>, &'a mut T)> {
+        self.data_points
+            .range_mut((Unbounded, Excluded(self.selected_time)))
+            .next_back()
+    }
+
+    // returns a mutable reference to the zoom multiplier
+    pub fn zoom_multipler_mut(&mut self) -> &mut u32 {
+        &mut self.zoom_multipler
+    }
+
+    // returns a mutable reference to the
+    pub fn selected_time_mut(&mut self) -> &mut DateTime<Local> {
+        &mut self.selected_time
     }
 
     fn draw_in_viewport(&self, ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
         // calculate first hour to display
         let first_hour = self
-            .times
-            .first()
-            .cloned()
+            .data_points
+            .first_key_value()
+            .map(|x| x.0.clone())
             .unwrap_or(self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap();
+
         let last_hour = self
-            .times
-            .last()
-            .cloned()
+            .data_points
+            .last_key_value()
+            .map(|x| x.0.clone())
             .unwrap_or(self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap()
@@ -107,15 +143,16 @@ impl TimelineWidget {
             }
         }
 
+
         // paint event markers
         {
             let event_marker_x_offset = 75.0;
 
             // draw all snapshot times
             for snapshot_time in self
-                .times
+                .data_points
                 .range(first_visible_time..=last_visible_time)
-                .cloned()
+                .map(|x| x.0.clone())
             {
                 let y_offset = get_y_offset(snapshot_time);
 
@@ -137,7 +174,7 @@ impl TimelineWidget {
     }
 }
 
-impl egui::Widget for TimelineWidget {
+impl<T> egui::Widget for &mut TimelineWidget<T> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         return egui::ScrollArea::vertical()
             .auto_shrink([false, false])
