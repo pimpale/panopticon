@@ -10,6 +10,7 @@ use eframe::egui;
 use sscanf::scanf;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
+use std::ops::Bound::{Excluded, Unbounded};
 
 use lazy_image::LazyImage;
 use timeline_widget::TimelineWidget;
@@ -80,9 +81,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 .first_key_value()
                 .map(|x| x.0.clone())
                 .unwrap_or(Local::now());
-
             Box::new(MyApp {
-                timeline_widget: TimelineWidget::new(1, current_time, snapshots),
+                scroll_dirty: false,
+                zoom_multipler: 1,
+                current_time,
+                snapshots,
             })
         }),
     );
@@ -96,7 +99,10 @@ struct Snapshot {
 }
 
 struct MyApp {
-    timeline_widget: TimelineWidget<Snapshot>,
+    snapshots: BTreeMap<DateTime<Local>, Snapshot>,
+    current_time: DateTime<Local>,
+    zoom_multipler: u32,
+    scroll_dirty: bool,
 }
 
 impl eframe::App for MyApp {
@@ -123,21 +129,32 @@ impl eframe::App for MyApp {
                         ui.label("commit classification");
                     });
                 });
-                ui.heading("Calendar ");
-                ui.add(
-                    egui::Slider::new(self.timeline_widget.zoom_multipler_mut(), 1..=100)
-                        .text("Zoom"),
-                );
-                ui.add(&mut self.timeline_widget);
-            });
 
-        let focused = false;
+                ui.heading("Calendar ");
+                let old_zoom =self.zoom_multipler;
+
+                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+
+                // if we change the zoom, make sure to center the scroll!
+                if self.zoom_multipler != old_zoom {
+                    self.scroll_dirty = true;
+                }
+
+                ui.add(TimelineWidget::new(
+                    self.zoom_multipler,
+                    &mut self.current_time,
+                    self.scroll_dirty,
+                    self.snapshots.keys().cloned(),
+                ));
+                self.scroll_dirty = false;
+            });
 
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
             // this draws the actual labeler
             if let Some((time, afk)) = self
-                .timeline_widget
-                .adjacent_data_point_mut()
+                .snapshots
+                .range(self.current_time..)
+                .next()
                 .map(|(time, snapshot)| (time.clone(), snapshot.afk))
             {
                 // put other flags here
@@ -156,10 +173,35 @@ impl eframe::App for MyApp {
 
                 ui.separator();
             }
+
+            if ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
+            {
+                self.current_time = self
+                    .snapshots
+                    .range((Unbounded, Excluded(self.current_time)))
+                    .next_back()
+                    .map(|(x, _)| x.clone())
+                    .unwrap_or(self.current_time);
+                self.scroll_dirty = true;
+            }
+            if ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
+            {
+                self.current_time = self
+                    .snapshots
+                    .range((Excluded(self.current_time), Unbounded))
+                    .next()
+                    .map(|(x, _)| x.clone())
+                    .unwrap_or(self.current_time);
+                self.scroll_dirty = true;
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some((_, snapshot)) = self.timeline_widget.adjacent_data_point_mut() {
+            if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
                     .always_show_scroll(true)
