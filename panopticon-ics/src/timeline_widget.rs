@@ -4,14 +4,28 @@ use std::collections::BTreeSet;
 
 const BASE_PIXELS_PER_HOUR: f32 = 50.0;
 
-pub struct TimelineWidget {
+fn duration_from_hours_f32(hours: f32) -> Duration {
+    return Duration::milliseconds((hours * 60.0 * 60.0 * 1000.0) as i64);
+}
+
+fn duration_to_hours_f32(dur: Duration) -> f32 {
+    return dur.num_milliseconds() as f32 / (60.0 * 60.0 * 1000.0);
+}
+
+pub struct TimelineWidget<'a> {
     zoom_multipler: u32,
-    selected_time: DateTime<Local>,
+    selected_time: &'a mut DateTime<Local>,
+    scroll_to_selected: bool,
     times: BTreeSet<DateTime<Local>>,
 }
 
-impl TimelineWidget {
-    pub fn new<I>(zoom_multipler: u32, selected_time: DateTime<Local>, times: I) -> Self
+impl<'a> TimelineWidget<'a> {
+    pub fn new<I>(
+        zoom_multipler: u32,
+        selected_time: &'a mut DateTime<Local>,
+        scroll_to_selected: bool,
+        times: I,
+    ) -> Self
     where
         I: IntoIterator<Item = DateTime<Local>>,
     {
@@ -19,45 +33,58 @@ impl TimelineWidget {
             zoom_multipler,
             times: times.into_iter().collect(),
             selected_time,
+            scroll_to_selected,
         }
     }
 
-    fn draw_in_viewport(&self, ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
-        // calculate first hour to display
-        let first_hour = self
+    // calculate first hour to display
+    fn first_hour(&self) -> DateTime<Local> {
+        return self
             .times
             .first()
             .cloned()
-            .unwrap_or(self.selected_time)
+            .unwrap_or(*self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap();
-        let last_hour = self
+    }
+
+    // calculate last hour to display
+    fn last_hour(&self) -> DateTime<Local> {
+        return self
             .times
             .last()
             .cloned()
-            .unwrap_or(self.selected_time)
+            .unwrap_or(*self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap()
             + Duration::hours(1);
+    }
 
-        // computes the pixel y_offset in this component for a given time
-        let get_y_offset = |time: DateTime<Local>| {
-            let hours = (time - first_hour).num_seconds() as f32 / 60.0 / 60.0;
-            return hours * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
-        };
+    fn hours_to_pixels(&self, hours: Duration) -> f32 {
+        return duration_to_hours_f32(hours) * BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32;
+    }
 
-        // computes the time for a given in this component for a given pixel y_offset
-        let get_time = |y_offset: f32| {
-            let hours_offset = y_offset / (BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32);
-            return first_hour + Duration::seconds((hours_offset * 60.0 * 60.0) as i64);
-        };
+    fn pixels_to_hours(&self, pixels: f32) -> Duration {
+        return duration_from_hours_f32(
+            pixels / (BASE_PIXELS_PER_HOUR * self.zoom_multipler as f32),
+        );
+    }
 
+    // computes the pixel y_offset in this component for a given time
+    fn get_y_offset(&self, time: DateTime<Local>) -> f32 {
+        return self.hours_to_pixels(time - self.first_hour());
+    }
+
+    // computes the time for a given in this component for a given pixel y_offset
+    fn get_time(&self, y_offset: f32) -> DateTime<Local> {
+        return self.first_hour() + self.pixels_to_hours(y_offset);
+    }
+
+    fn draw_in_viewport(&mut self, ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
         let (response, painter) = ui.allocate_painter(
             egui::Vec2 {
                 x: 200.0,
-                y: self.zoom_multipler as f32
-                    * (last_hour - first_hour).num_hours() as f32
-                    * BASE_PIXELS_PER_HOUR,
+                y: self.hours_to_pixels(self.last_hour() - self.first_hour()),
             },
             egui::Sense::click_and_drag(),
         );
@@ -75,8 +102,8 @@ impl TimelineWidget {
             _ => Duration::seconds(1),
         };
 
-        let first_visible_time = get_time(rect.top());
-        let last_visible_time = get_time(rect.bottom());
+        let first_visible_time = self.get_time(rect.top());
+        let last_visible_time = self.get_time(rect.bottom());
 
         // paint hlines and labels
         {
@@ -84,7 +111,7 @@ impl TimelineWidget {
             let mut current_time = first_visible_time.duration_trunc(time_increment).unwrap();
 
             while current_time <= last_visible_time {
-                let y_offset = get_y_offset(current_time);
+                let y_offset = self.get_y_offset(current_time);
 
                 painter.hline(
                     time_mark_region.left()..=time_mark_region.right(),
@@ -117,7 +144,7 @@ impl TimelineWidget {
                 .range(first_visible_time..=last_visible_time)
                 .cloned()
             {
-                let y_offset = get_y_offset(snapshot_time);
+                let y_offset = self.get_y_offset(snapshot_time);
 
                 painter.hline(
                     (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
@@ -128,18 +155,57 @@ impl TimelineWidget {
             // paint current_time marker
             painter.hline(
                 (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
-                time_mark_region.top() + get_y_offset(self.selected_time),
+                time_mark_region.top() + self.get_y_offset(*self.selected_time),
                 egui::Stroke::new(1.0, egui::Color32::RED),
             );
+        }
+
+        // if we double clicked a mouse on the calendar, set to that time
+        if response.double_clicked() {
+            if let Some(p) = response.interact_pointer_pos() {
+                // get y  offset wrt time_mark_region
+                let y_offset = p.y - time_mark_region.top();
+                let time = self.get_time(y_offset);
+                // we're fine with accepting anything within 25 pixels either direction
+                let permissible_error = self.pixels_to_hours(10.0);
+
+                // get all times within a range of the true value, and then sort them to see which one is closest
+                if let Some(selected_time) = self
+                    .times
+                    .range((time - permissible_error)..=(time + permissible_error))
+                    .min_by_key(|x| i64::abs(time.timestamp_nanos() - x.timestamp_nanos()))
+                {
+                    *self.selected_time = *selected_time;
+                }
+            }
         }
 
         return response;
     }
 }
 
-impl egui::Widget for TimelineWidget {
-    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        return egui::ScrollArea::vertical()
+impl<'a> egui::Widget for TimelineWidget<'a> {
+    fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
+        let mut scroll_area = egui::ScrollArea::vertical();
+
+        if self.scroll_to_selected {
+            let visible_section_duration = self.pixels_to_hours(ui.available_height());
+
+            // check if content will overflow
+            if self.last_hour() - self.first_hour() > visible_section_duration {
+                let offset = (self.get_y_offset(*self.selected_time) - ui.available_height() / 2.0)
+                    .clamp(
+                        // no need to scroll if negative
+                        0.0,
+                        // if the scroll would scroll past content, dont
+                        self.get_y_offset(self.last_hour() - visible_section_duration),
+                    );
+
+                scroll_area = scroll_area.vertical_scroll_offset(offset);
+            }
+        }
+
+        return scroll_area
             .auto_shrink([false, false])
             .show_viewport(ui, |ui, rect| self.draw_in_viewport(ui, rect))
             .inner;

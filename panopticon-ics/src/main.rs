@@ -82,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 .map(|x| x.0.clone())
                 .unwrap_or(Local::now());
             Box::new(MyApp {
+                scroll_dirty: false,
                 zoom_multipler: 1,
                 current_time,
                 snapshots,
@@ -101,6 +102,7 @@ struct MyApp {
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
     zoom_multipler: u32,
+    scroll_dirty: bool,
 }
 
 impl eframe::App for MyApp {
@@ -127,17 +129,25 @@ impl eframe::App for MyApp {
                         ui.label("commit classification");
                     });
                 });
+
                 ui.heading("Calendar ");
+                let old_zoom =self.zoom_multipler;
+
                 ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+
+                // if we change the zoom, make sure to center the scroll!
+                if self.zoom_multipler != old_zoom {
+                    self.scroll_dirty = true;
+                }
 
                 ui.add(TimelineWidget::new(
                     self.zoom_multipler,
-                    self.current_time,
+                    &mut self.current_time,
+                    self.scroll_dirty,
                     self.snapshots.keys().cloned(),
-                ))
+                ));
+                self.scroll_dirty = false;
             });
-
-        let focused = false;
 
         egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
             // this draws the actual labeler
@@ -174,6 +184,7 @@ impl eframe::App for MyApp {
                     .next_back()
                     .map(|(x, _)| x.clone())
                     .unwrap_or(self.current_time);
+                self.scroll_dirty = true;
             }
             if ui
                 .input_mut()
@@ -185,6 +196,7 @@ impl eframe::App for MyApp {
                     .next()
                     .map(|(x, _)| x.clone())
                     .unwrap_or(self.current_time);
+                self.scroll_dirty = true;
             }
         });
 
