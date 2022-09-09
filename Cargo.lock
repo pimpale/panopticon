@@ -2196,9 +2196,9 @@ dependencies = [
 
 [[package]]
 name = "user-idle"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30fd47167041753b6e5d7e9f8c86b88240e878827147a117be3bbfe9e3d12e2b"
+checksum = "7c5f98cef61e42fc123884ac1c33cbc38c8f88567d67cb414bb4d03dedde1b55"
 dependencies = [
  "CoreFoundation-sys",
  "IOKit-sys",
