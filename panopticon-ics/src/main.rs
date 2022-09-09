@@ -9,11 +9,12 @@ use clap::Parser;
 use eframe::egui;
 use sscanf::scanf;
 use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Bound::{Excluded, Unbounded};
 
 use lazy_image::LazyImage;
-use timeline_widget::TimelineWidget;
+use timeline_widget::{TimelineMarker, TimelineWidget};
 
 #[derive(Parser, Clone)]
 #[clap(name = "panopticon-ics")]
@@ -63,6 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                     x.insert(Snapshot {
                         screenshots: BTreeMap::from([(screen, lazy_image)]),
                         afk,
+                        classification: None,
                     });
                 }
                 Entry::Occupied(mut x) => {
@@ -82,10 +84,13 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 .map(|x| x.0.clone())
                 .unwrap_or(Local::now());
             Box::new(MyApp {
-                scroll_dirty: false,
                 zoom_multipler: 1,
                 current_time,
+                cached_tasks: HashMap::new(),
                 snapshots,
+                scroll_dirty: false,
+                task_entrybox_hint: String::new(),
+                task_entrybox_text: String::new(),
             })
         }),
     );
@@ -96,13 +101,20 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
 struct Snapshot {
     screenshots: BTreeMap<u64, LazyImage>,
     afk: bool,
+    classification: Option<String>,
 }
 
 struct MyApp {
+    // variables that capture relatively permanent state
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
+    cached_tasks: HashMap<String, HashSet<String>>,
     zoom_multipler: u32,
+
+    // variables that capture temporary state
     scroll_dirty: bool,
+    task_entrybox_text: String,
+    task_entrybox_hint: String,
 }
 
 impl eframe::App for MyApp {
@@ -131,7 +143,7 @@ impl eframe::App for MyApp {
                 });
 
                 ui.heading("Calendar ");
-                let old_zoom =self.zoom_multipler;
+                let old_zoom = self.zoom_multipler;
 
                 ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
 
@@ -144,7 +156,23 @@ impl eframe::App for MyApp {
                     self.zoom_multipler,
                     &mut self.current_time,
                     self.scroll_dirty,
-                    self.snapshots.keys().cloned(),
+                    self.snapshots.iter().map(|(k, v)| {
+                        (
+                            *k,
+                            TimelineMarker {
+                                stroke: egui::Stroke {
+                                    color: if v.classification.is_some() {
+                                        egui::Color32::LIGHT_GREEN
+                                    } else if v.afk {
+                                        egui::Color32::LIGHT_GRAY
+                                    } else {
+                                        egui::Color32::LIGHT_BLUE
+                                    },
+                                    width: 1.0,
+                                },
+                            },
+                        )
+                    }),
                 ));
                 self.scroll_dirty = false;
             });
@@ -172,6 +200,31 @@ impl eframe::App for MyApp {
                 });
 
                 ui.separator();
+
+                // keyboard controls
+                ui.horizontal(|ui| {
+                    ui.label("Current Task: ");
+                    let task_entrybox = egui::TextEdit::singleline(&mut self.task_entrybox_text)
+                        .hint_text(&self.task_entrybox_hint);
+                    let response = ui.add(task_entrybox);
+                    if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+                        self.task_entrybox_hint = self.task_entrybox_text.clone();
+                        self.task_entrybox_text = String::new();
+                        println!("enter pressed!");
+
+                        // scroll down to the next snapshot
+                        self.current_time = self
+                            .snapshots
+                            .range((Excluded(self.current_time), Unbounded))
+                            .next()
+                            .map(|(x, _)| x.clone())
+                            .unwrap_or(self.current_time);
+                        self.scroll_dirty = true;
+
+                        // regrab focus so we can keep typing
+                        response.request_focus()
+                    }
+                });
             }
 
             if ui

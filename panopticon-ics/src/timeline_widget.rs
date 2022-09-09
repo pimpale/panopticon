@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, DurationRound, Local};
 use eframe::egui;
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 const BASE_PIXELS_PER_HOUR: f32 = 50.0;
 
@@ -12,11 +12,15 @@ fn duration_to_hours_f32(dur: Duration) -> f32 {
     return dur.num_milliseconds() as f32 / (60.0 * 60.0 * 1000.0);
 }
 
+pub struct TimelineMarker {
+    pub stroke: egui::epaint::Stroke,
+}
+
 pub struct TimelineWidget<'a> {
     zoom_multipler: u32,
     selected_time: &'a mut DateTime<Local>,
     scroll_to_selected: bool,
-    times: BTreeSet<DateTime<Local>>,
+    markers: BTreeMap<DateTime<Local>, TimelineMarker>,
 }
 
 impl<'a> TimelineWidget<'a> {
@@ -24,14 +28,14 @@ impl<'a> TimelineWidget<'a> {
         zoom_multipler: u32,
         selected_time: &'a mut DateTime<Local>,
         scroll_to_selected: bool,
-        times: I,
+        markers: I,
     ) -> Self
     where
-        I: IntoIterator<Item = DateTime<Local>>,
+        I: IntoIterator<Item = (DateTime<Local>, TimelineMarker)>,
     {
         TimelineWidget {
             zoom_multipler,
-            times: times.into_iter().collect(),
+            markers: markers.into_iter().collect(),
             selected_time,
             scroll_to_selected,
         }
@@ -40,9 +44,9 @@ impl<'a> TimelineWidget<'a> {
     // calculate first hour to display
     fn first_hour(&self) -> DateTime<Local> {
         return self
-            .times
-            .first()
-            .cloned()
+            .markers
+            .first_key_value()
+            .map(|x| x.0.clone())
             .unwrap_or(*self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap();
@@ -51,9 +55,9 @@ impl<'a> TimelineWidget<'a> {
     // calculate last hour to display
     fn last_hour(&self) -> DateTime<Local> {
         return self
-            .times
-            .last()
-            .cloned()
+            .markers
+            .last_key_value()
+            .map(|x| x.0.clone())
             .unwrap_or(*self.selected_time)
             .duration_trunc(Duration::hours(1))
             .unwrap()
@@ -138,18 +142,17 @@ impl<'a> TimelineWidget<'a> {
         {
             let event_marker_x_offset = 75.0;
 
-            // draw all snapshot times
-            for snapshot_time in self
-                .times
+            // draw all markers
+            for (marker_time, marker_data) in self
+                .markers
                 .range(first_visible_time..=last_visible_time)
-                .cloned()
             {
-                let y_offset = self.get_y_offset(snapshot_time);
+                let y_offset = self.get_y_offset(*marker_time);
 
                 painter.hline(
                     (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
                     time_mark_region.top() + y_offset,
-                    widget_visuals.fg_stroke,
+                    marker_data.stroke,
                 );
             }
             // paint current_time marker
@@ -170,10 +173,10 @@ impl<'a> TimelineWidget<'a> {
                 let permissible_error = self.pixels_to_hours(10.0);
 
                 // get all times within a range of the true value, and then sort them to see which one is closest
-                if let Some(selected_time) = self
-                    .times
+                if let Some((selected_time,_)) = self
+                    .markers
                     .range((time - permissible_error)..=(time + permissible_error))
-                    .min_by_key(|x| i64::abs(time.timestamp_nanos() - x.timestamp_nanos()))
+                    .min_by_key(|(k, _)| i64::abs(time.timestamp_nanos() - k.timestamp_nanos()))
                 {
                     *self.selected_time = *selected_time;
                 }
