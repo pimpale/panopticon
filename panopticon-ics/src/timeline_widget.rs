@@ -12,18 +12,19 @@ fn duration_to_hours_f32(dur: Duration) -> f32 {
     return dur.num_milliseconds() as f32 / (60.0 * 60.0 * 1000.0);
 }
 
-pub struct TimelineMarker {
+pub struct TimelineMarker<'a> {
     pub stroke: egui::epaint::Stroke,
+    pub label: &'a str,
 }
 
-pub struct TimelineWidget<'a> {
+pub struct TimelineWidget<'a, 'b> {
     zoom_multipler: u32,
     selected_time: &'a mut DateTime<Local>,
     scroll_to_selected: bool,
-    markers: BTreeMap<DateTime<Local>, TimelineMarker>,
+    markers: BTreeMap<DateTime<Local>, TimelineMarker<'b>>,
 }
 
-impl<'a> TimelineWidget<'a> {
+impl<'a, 'b> TimelineWidget<'a, 'b> {
     pub fn new<I>(
         zoom_multipler: u32,
         selected_time: &'a mut DateTime<Local>,
@@ -31,7 +32,7 @@ impl<'a> TimelineWidget<'a> {
         markers: I,
     ) -> Self
     where
-        I: IntoIterator<Item = (DateTime<Local>, TimelineMarker)>,
+        I: IntoIterator<Item = (DateTime<Local>, TimelineMarker<'b>)>,
     {
         TimelineWidget {
             zoom_multipler,
@@ -143,9 +144,8 @@ impl<'a> TimelineWidget<'a> {
             let event_marker_x_offset = 75.0;
 
             // draw all markers
-            for (marker_time, marker_data) in self
-                .markers
-                .range(first_visible_time..=last_visible_time)
+            for (marker_time, marker_data) in
+                self.markers.range(first_visible_time..=last_visible_time)
             {
                 let y_offset = self.get_y_offset(*marker_time);
 
@@ -173,7 +173,7 @@ impl<'a> TimelineWidget<'a> {
                 let permissible_error = self.pixels_to_hours(10.0);
 
                 // get all times within a range of the true value, and then sort them to see which one is closest
-                if let Some((selected_time,_)) = self
+                if let Some((selected_time, _)) = self
                     .markers
                     .range((time - permissible_error)..=(time + permissible_error))
                     .min_by_key(|(k, _)| i64::abs(time.timestamp_nanos() - k.timestamp_nanos()))
@@ -187,7 +187,7 @@ impl<'a> TimelineWidget<'a> {
     }
 }
 
-impl<'a> egui::Widget for TimelineWidget<'a> {
+impl<'a, 'b> egui::Widget for TimelineWidget<'a, 'b> {
     fn ui(mut self, ui: &mut egui::Ui) -> egui::Response {
         let mut scroll_area = egui::ScrollArea::vertical();
 
