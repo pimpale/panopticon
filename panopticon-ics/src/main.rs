@@ -154,7 +154,7 @@ impl eframe::App for MyApp {
                             *k,
                             TimelineMarker {
                                 stroke: egui::Stroke {
-                                    color: if v.classification.len() > 0 {
+                                    color: if !v.classification.is_empty() {
                                         egui::Color32::LIGHT_GREEN
                                     } else if v.afk {
                                         egui::Color32::LIGHT_GRAY
@@ -163,6 +163,7 @@ impl eframe::App for MyApp {
                                     },
                                     width: 1.0,
                                 },
+                                label: &v.classification,
                             },
                         )
                     }),
@@ -205,12 +206,17 @@ impl eframe::App for MyApp {
                     ui.label("Current Task: ");
 
                     let task_entrybox = egui::TextEdit::singleline(&mut snapshot.classification)
-                        .hint_text(hint_text);
+                        .hint_text(&hint_text);
                     let response = ui.add(task_entrybox);
 
                     if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
                         // if there's a one after, then grab its focus
                         if let Some((next_time, _)) = iter.next() {
+                            // if was empty, then accept hint
+                            if snapshot.classification.is_empty() {
+                                snapshot.classification = hint_text;
+                            }
+
                             // update pointer
                             self.current_time = *next_time;
                             self.scroll_dirty = true;

@@ -139,9 +139,11 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
             }
         }
 
-        // paint event markers
+        // paint event markers + text
         {
             let event_marker_x_offset = 75.0;
+
+            let mut prev_y_offset = self.get_y_offset(self.first_hour());
 
             // draw all markers
             for (marker_time, marker_data) in
@@ -149,11 +151,32 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
             {
                 let y_offset = self.get_y_offset(*marker_time);
 
+                let xrange =
+                    (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right();
+
                 painter.hline(
-                    (time_mark_region.left() + event_marker_x_offset)..=time_mark_region.right(),
+                    xrange.clone(),
                     time_mark_region.top() + y_offset,
                     marker_data.stroke,
                 );
+
+                let galley = painter.layout_no_wrap(
+                    marker_data.label.to_owned(),
+                    egui::FontId::proportional(10.0),
+                    marker_data.stroke.color,
+                );
+
+                if galley.rect.height() < (y_offset - prev_y_offset) {
+                    painter.galley(
+                        egui::Pos2 {
+                            x: time_mark_region.left() + event_marker_x_offset,
+                            y: time_mark_region.top() + y_offset - galley.rect.height(),
+                        },
+                        galley,
+                    );
+                }
+
+                prev_y_offset = y_offset;
             }
             // paint current_time marker
             painter.hline(
@@ -164,12 +187,12 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
         }
 
         // if we double clicked a mouse on the calendar, set to that time
-        if response.double_clicked() {
+        if response.clicked() {
             if let Some(p) = response.interact_pointer_pos() {
                 // get y  offset wrt time_mark_region
                 let y_offset = p.y - time_mark_region.top();
                 let time = self.get_time(y_offset);
-                // we're fine with accepting anything within 25 pixels either direction
+                // we're fine with accepting anything within 10 pixels either direction
                 let permissible_error = self.pixels_to_hours(10.0);
 
                 // get all times within a range of the true value, and then sort them to see which one is closest
