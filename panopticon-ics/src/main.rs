@@ -3,7 +3,9 @@
 
 mod lazy_image;
 mod timeline_widget;
+mod autocomplete_text_widget;
 
+use autocomplete_text_widget::AutocompleteTextWidget;
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
@@ -87,6 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 current_time,
                 snapshots,
                 scroll_dirty: false,
+                autocomplete_text_widget: AutocompleteTextWidget::new()
             })
         }),
     );
@@ -105,6 +108,7 @@ struct MyApp {
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
     zoom_multipler: u32,
+    autocomplete_text_widget: AutocompleteTextWidget
 
     // variables that capture temporary state
     scroll_dirty: bool,
@@ -136,12 +140,9 @@ impl eframe::App for MyApp {
                 });
 
                 ui.heading("Calendar ");
-                let old_zoom = self.zoom_multipler;
 
-                ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
-
-                // if we change the zoom, make sure to center the scroll!
-                if self.zoom_multipler != old_zoom {
+                let response = ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+                if response.changed() {
                     self.scroll_dirty = true;
                 }
 
@@ -157,9 +158,9 @@ impl eframe::App for MyApp {
                                     color: if !v.classification.is_empty() {
                                         egui::Color32::LIGHT_GREEN
                                     } else if v.afk {
-                                        egui::Color32::LIGHT_GRAY
+                                        egui::Color32::LIGHT_YELLOW
                                     } else {
-                                        egui::Color32::LIGHT_BLUE
+                                        egui::Color32::LIGHT_GRAY
                                     },
                                     width: 1.0,
                                 },
@@ -210,17 +211,16 @@ impl eframe::App for MyApp {
                     let response = ui.add(task_entrybox);
 
                     if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+                        // if was empty, then accept hint
+                        if snapshot.classification.is_empty() {
+                            snapshot.classification = hint_text;
+                        }
+
                         // if there's a one after, then grab its focus
                         if let Some((next_time, _)) = iter.next() {
-                            // if was empty, then accept hint
-                            if snapshot.classification.is_empty() {
-                                snapshot.classification = hint_text;
-                            }
-
                             // update pointer
                             self.current_time = *next_time;
                             self.scroll_dirty = true;
-
                             // regrab focus so we can keep typing
                             response.request_focus()
                         }
