@@ -1,9 +1,9 @@
 #![feature(map_first_last)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod autocomplete_text_widget;
 mod lazy_image;
 mod timeline_widget;
-mod autocomplete_text_widget;
 
 use autocomplete_text_widget::AutocompleteTextWidget;
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
@@ -89,7 +89,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 current_time,
                 snapshots,
                 scroll_dirty: false,
-                autocomplete_text_widget: AutocompleteTextWidget::new()
             })
         }),
     );
@@ -108,7 +107,6 @@ struct MyApp {
     snapshots: BTreeMap<DateTime<Local>, Snapshot>,
     current_time: DateTime<Local>,
     zoom_multipler: u32,
-    autocomplete_text_widget: AutocompleteTextWidget
 
     // variables that capture temporary state
     scroll_dirty: bool,
@@ -141,7 +139,8 @@ impl eframe::App for MyApp {
 
                 ui.heading("Calendar ");
 
-                let response = ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
+                let response =
+                    ui.add(egui::Slider::new(&mut self.zoom_multipler, 1..=100).text("Zoom"));
                 if response.changed() {
                     self.scroll_dirty = true;
                 }
@@ -172,7 +171,7 @@ impl eframe::App for MyApp {
                 self.scroll_dirty = false;
             });
 
-        egui::TopBottomPanel::bottom("Controls").show(ctx, |ui| {
+        egui::TopBottomPanel::top("Controls").show(ctx, |ui| {
             // the hint text is the previous snapshot classification
             let hint_text = self
                 .snapshots
@@ -199,6 +198,7 @@ impl eframe::App for MyApp {
                         );
                     }
                 });
+
 
                 ui.separator();
 

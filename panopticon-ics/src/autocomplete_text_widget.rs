@@ -1,24 +1,31 @@
 use eframe::egui;
-use std::{collections::BTreeSet, ops::Range};
+use std::ops::Range;
 
-pub struct AutocompleteTextWidget<'a> {
-    candidates: Vec<&'a str>,
+pub struct AutocompleteTextWidget {
+    candidates: Vec<String>,
     input: String,
     ac_state: AcState,
     cursor_to_end: bool,
     accepted_string: String,
 }
 
-impl<'a> AutocompleteTextWidget<'a> {
-    pub fn new<I>(candidates: I, input: String) -> Self
+impl AutocompleteTextWidget {
+    pub fn new<I, T>(candidates: I, input: String) -> Self
     where
-        I: IntoIterator<Item = &'a str>,
+        I: IntoIterator<Item = T>,
+        T: Into<String>,
     {
-        AutocompleteTextWidget
+        AutocompleteTextWidget {
+            candidates: candidates.into_iter().map(|x| x.into()).collect(),
+            input,
+            ac_state: AcState::default(),
+            cursor_to_end: false,
+            accepted_string: String::new(),
+        }
     }
 }
 
-impl<'a> egui::Widget for AutocompleteTextWidget<'a> {
+impl egui::Widget for &mut AutocompleteTextWidget {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let te_id = ui.make_persistent_id("text_edit_ac");
         let up_pressed = ui
@@ -41,7 +48,7 @@ impl<'a> egui::Widget for AutocompleteTextWidget<'a> {
         let msg = autocomplete_popup_below(
             &mut self.input,
             &mut self.ac_state,
-            self.candidates.into(),
+            &self.candidates,
             ui,
             &re,
             up_pressed,
@@ -98,7 +105,7 @@ pub struct PopupMsg {
 fn autocomplete_popup_below(
     string: &mut String,
     state: &mut AcState,
-    candidates: &[&str],
+    candidates: &Vec<String>,
     ui: &mut egui::Ui,
     response: &egui::Response,
     up_pressed: bool,
@@ -160,7 +167,7 @@ fn autocomplete_popup_below(
             }
             let mut complete = None;
             egui::popup_below_widget(ui, popup_id, response, |ui| {
-                for (i, &candidate) in candidates
+                for (i, candidate) in candidates
                     .iter()
                     .filter(|candidate| candidate.contains(last))
                     .enumerate()
@@ -184,7 +191,7 @@ fn autocomplete_popup_below(
             });
             if let Some(candidate) = complete {
                 let range = str_range(string, last);
-                string.replace_range(range, candidate);
+                string.replace_range(range, &candidate);
                 state.input_changed = false;
                 ret_msg.applied = true;
             }
