@@ -199,7 +199,6 @@ impl eframe::App for MyApp {
                     }
                 });
 
-
                 ui.separator();
 
                 // keyboard controls
@@ -226,6 +225,11 @@ impl eframe::App for MyApp {
                         }
                     }
                 });
+
+                let x = AutocompleteTextWidget::new(&mut snapshot.classification, |_| {
+                    return vec!["Cool".to_owned(), "Blah".to_owned(), "Nice".to_owned()];
+                });
+                ui.add(x);
             }
 
             if ui
