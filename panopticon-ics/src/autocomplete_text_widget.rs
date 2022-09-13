@@ -1,72 +1,83 @@
 use eframe::egui;
-use std::ops::Range;
+use std::{any::TypeId, ops::Range};
 
-pub struct AutocompleteTextWidget {
-    candidates: Vec<String>,
-    input: String,
-    ac_state: AcState,
-    cursor_to_end: bool,
-    accepted_string: String,
+/// this struct allows us to uniquely namespace the sugestion popup
+struct AutocompleteTextWidgetNamespace {}
+
+pub struct AutocompleteTextWidget<'t, F, K> {
+    candidate_generator: F,
+    selected: Option<K>,
+    text: &'t mut String,
 }
 
-impl AutocompleteTextWidget {
-    pub fn new<I, T>(candidates: I, input: String) -> Self
-    where
-        I: IntoIterator<Item = T>,
-        T: Into<String>,
-    {
+impl<'t, F, K> AutocompleteTextWidget<'t, F, K> {
+    pub fn new(text: &'t mut String, candidate_generator: F, selected: Option<K>) -> Self {
         AutocompleteTextWidget {
-            candidates: candidates.into_iter().map(|x| x.into()).collect(),
-            input,
-            ac_state: AcState::default(),
-            cursor_to_end: false,
-            accepted_string: String::new(),
+            candidate_generator,
+            text,
+            selected,
         }
     }
 }
 
-impl egui::Widget for &mut AutocompleteTextWidget {
+impl<'t, F, K> egui::Widget for AutocompleteTextWidget<'t, F, K>
+where
+    F: FnOnce(&dyn egui::TextBuffer) -> Vec<(K, String)>,
+    // identity of an option
+    K: PartialEq + Clone,
+{
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let te_id = ui.make_persistent_id("text_edit_ac");
-        let up_pressed = ui
-            .input_mut()
-            .consume_key(egui::Modifiers::default(), egui::Key::ArrowUp);
-        let down_pressed = ui
-            .input_mut()
-            .consume_key(egui::Modifiers::default(), egui::Key::ArrowDown);
-        let end_pos = self.input.chars().count();
-        let te = egui::TextEdit::singleline(&mut self.input)
-            .lock_focus(true)
-            .id(te_id);
-        if self.cursor_to_end {
-            set_cursor_pos(ui, te_id, end_pos);
-        }
-        let re = ui.add(te);
+        let te = egui::TextEdit::singleline(self.text).lock_focus(true);
+        let te_re = ui.add(te);
 
-        self.ac_state.input_changed = re.changed();
+        let popup_id = te_re
+            .id
+            .with(TypeId::of::<AutocompleteTextWidgetNamespace>())
+            .with("suggestion_popup");
 
-        let msg = autocomplete_popup_below(
-            &mut self.input,
-            &mut self.ac_state,
-            &self.candidates,
-            ui,
-            &re,
-            up_pressed,
-            down_pressed,
-        );
-        if msg.applied {
-            self.cursor_to_end = true;
-        } else {
-            self.cursor_to_end = false;
-        }
-        if ui.input().key_pressed(egui::Key::Enter) {
-            self.accepted_string = self.input.clone();
-            re.request_focus();
-        }
-        if msg.stole_focus {
-            re.request_focus();
-        }
-        return re;
+        let opts = (self.candidate_generator)(self.text);
+
+        egui::popup_below_widget(ui, popup_id, &te_re, |ui| {
+            // enter or tab selects the current option
+            // up selects previous option
+            // down selects next option
+
+            let selected = self.selected.or(ui.memory().data.get_temp();
+
+            let arrow_up = ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+            let arrow_down = ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+            let enter = ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+            let tab = ui
+                .input_mut()
+                .consume_key(egui::Modifiers::NONE, egui::Key::Tab);
+
+            let x: Vec<_> = opts.into_iter().collect();
+
+            for (i, (key, candidate)) in x.iter().enumerate() {
+                let resp_label =
+                    ui.selectable_label(self.selected.as_ref() == Some(key), candidate);
+                if resp_label.clicked() || enter || tab {
+                    // push completion
+                    self.text.push_str(&candidate);
+                    // close popup
+                    ui.memory().close_popup();
+                    // move cursor to end
+                    set_cursor_pos(ui, te_re.id, self.text.chars().count());
+                } else if arrow_up {
+                    self.selected = Some(x[i.saturating_sub(1)].0);
+                } else if arrow_down {
+                    self.selected = Some(x[usize::min(x.len() - 1, i)].0);
+                }
+            }
+        });
+
+        return te_re;
     }
 }
 
@@ -75,138 +86,4 @@ fn set_cursor_pos(ui: &mut egui::Ui, te_id: egui::Id, char_pos: usize) {
     let ccursor = egui::text::CCursor::new(char_pos);
     state.set_ccursor_range(Some(egui::text::CCursorRange::one(ccursor)));
     egui::TextEdit::store_state(ui.ctx(), te_id, state);
-}
-
-pub struct AcState {
-    /// Selection index in the autocomplete list
-    select: Option<usize>,
-    /// Input changed this frame
-    pub input_changed: bool,
-}
-
-impl Default for AcState {
-    fn default() -> Self {
-        Self {
-            select: Some(0),
-            input_changed: true,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct PopupMsg {
-    /// Returns whether a suggestion was applied or not
-    pub applied: bool,
-    /// Whether the popup stole focus (for example on pressing enter)
-    pub stole_focus: bool,
-}
-
-/// Popup for autocompleting.
-fn autocomplete_popup_below(
-    string: &mut String,
-    state: &mut AcState,
-    candidates: &Vec<String>,
-    ui: &mut egui::Ui,
-    response: &egui::Response,
-    up_pressed: bool,
-    down_pressed: bool,
-) -> PopupMsg {
-    let mut ret_msg = PopupMsg::default();
-    let popup_id = ui.make_persistent_id("autocomplete_popup");
-    let last_char_is_terminating = string.chars().last().map_or(true, |c| !c.is_alphabetic());
-    let last = if last_char_is_terminating {
-        ""
-    } else {
-        string.split_ascii_whitespace().last().unwrap_or("")
-    };
-    if down_pressed {
-        match &mut state.select {
-            None => state.select = Some(0),
-            Some(sel) => *sel += 1,
-        }
-    }
-    if let Some(sel) = &mut state.select {
-        if up_pressed {
-            if *sel > 0 {
-                *sel -= 1;
-            } else {
-                // Allow selecting "Nothing" by going above first element
-                state.select = None;
-            }
-        }
-    } else if state.input_changed {
-        // Always select index 0 when input was changed for convenience
-        state.select = Some(0);
-    }
-    if !string.is_empty() && !last.is_empty() {
-        let mut exact_match = None;
-        // Get length of list and also whether there is an exact match
-        let mut i = 0;
-        let len = candidates
-            .iter()
-            .filter(|candidate| {
-                if **candidate == last {
-                    exact_match = Some(i);
-                }
-                let predicate = candidate.contains(last);
-                if predicate {
-                    i += 1;
-                }
-                predicate
-            })
-            .count();
-        match exact_match {
-            Some(idx) if state.input_changed => state.select = Some(idx),
-            _ => {}
-        }
-        if len > 0 {
-            if let Some(selection) = &mut state.select {
-                if *selection >= len {
-                    *selection = len - 1;
-                }
-            }
-            let mut complete = None;
-            egui::popup_below_widget(ui, popup_id, response, |ui| {
-                for (i, candidate) in candidates
-                    .iter()
-                    .filter(|candidate| candidate.contains(last))
-                    .enumerate()
-                {
-                    if ui
-                        .selectable_label(state.select == Some(i), candidate)
-                        .clicked()
-                    {
-                        complete = Some(candidate);
-                    }
-                    let return_pressed = ui.input().key_pressed(egui::Key::Enter);
-                    if state.select == Some(i)
-                        && (ui.input().key_pressed(egui::Key::Tab) || return_pressed)
-                    {
-                        complete = Some(candidate);
-                        if return_pressed {
-                            ret_msg.stole_focus = true;
-                        }
-                    }
-                }
-            });
-            if let Some(candidate) = complete {
-                let range = str_range(string, last);
-                string.replace_range(range, &candidate);
-                state.input_changed = false;
-                ret_msg.applied = true;
-            }
-            if !string.is_empty() {
-                ui.memory().open_popup(popup_id);
-            } else {
-                ui.memory().close_popup();
-            }
-        }
-    }
-    ret_msg
-}
-
-fn str_range(parent: &str, sub: &str) -> Range<usize> {
-    let beg = sub.as_ptr() as usize - parent.as_ptr() as usize;
-    let end = beg + sub.len();
-    beg..end
 }
