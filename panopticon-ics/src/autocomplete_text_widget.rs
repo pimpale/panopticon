@@ -9,11 +9,13 @@ use std::{
 struct AutocompleteTextWidgetMemory {
     opts: Vec<String>,
     selected_idx: usize,
+    first_frame: bool,
 }
 
 pub struct AutocompleteTextWidget<'t> {
     candidate_generator: Box<dyn FnOnce(&dyn egui::TextBuffer) -> Vec<String>>,
     text: &'t mut String,
+    
 }
 
 impl<'t> AutocompleteTextWidget<'t> {
@@ -37,6 +39,13 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
         let te = egui::TextEdit::singleline(self.text).lock_focus(true);
         let te_re = ui.add(te);
 
+        if te_re.gained_focus() {
+            println!("GAINED FOCUS");
+        }
+        if te_re.lost_focus() {
+            println!("LOST FOCUS");
+        }
+
         let popup_id = te_re
             .id
             .with(TypeId::of::<AutocompleteTextWidgetMemory>())
@@ -51,6 +60,7 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
                     Arc::new(Mutex::new(AutocompleteTextWidgetMemory {
                         opts,
                         selected_idx: 0,
+                        first_frame: true,
                     })),
                 );
                 ui.memory().open_popup(popup_id);
@@ -60,8 +70,6 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
                     .remove::<Arc<Mutex<AutocompleteTextWidgetMemory>>>(popup_id);
             }
         }
-
-        // whether to show popup or not
 
         // will only display if popup is showing (hidden state in memory)
         egui::popup_below_widget(ui, popup_id, &te_re, |ui| {
@@ -83,16 +91,10 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
             let arrow_down = ui
                 .input_mut()
                 .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
-            let enter = ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::Enter);
-            let tab = ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::Tab);
-            let esc = false
+            let tab = !data.first_frame
                 && ui
                     .input_mut()
-                    .consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+                    .consume_key(egui::Modifiers::NONE, egui::Key::Tab);
 
             let mut clicked_idx = None;
 
@@ -103,7 +105,7 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
                 }
             }
 
-            if enter || tab || clicked_idx.is_some() {
+            if tab || clicked_idx.is_some() {
                 let commiting_idx = clicked_idx.unwrap_or(data.selected_idx);
                 let candidate = &data.opts[commiting_idx];
                 // push completion
@@ -111,10 +113,9 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
                 // move cursor to end
                 set_cursor_pos(ui, te_re.id, self.text.chars().count());
                 // close popup
-                ui.memory().close_popup();
-            } else if esc {
-                // close popup
-                ui.memory().close_popup();
+                ui.memory().toggle_popup(popup_id);
+                // request focus goes back to the thing
+                te_re.request_focus();
             } else {
                 // arrows wrap
                 if arrow_down {
@@ -124,6 +125,7 @@ impl<'t> egui::Widget for AutocompleteTextWidget<'t> {
                     data.selected_idx = wrapping_add(data.selected_idx, -1, data.opts.len())
                 }
             }
+            data.first_frame = false;
         });
 
         return te_re;
@@ -135,4 +137,10 @@ fn set_cursor_pos(ui: &mut egui::Ui, te_id: egui::Id, char_pos: usize) {
     let ccursor = egui::text::CCursor::new(char_pos);
     state.set_ccursor_range(Some(egui::text::CCursorRange::one(ccursor)));
     egui::TextEdit::store_state(ui.ctx(), te_id, state);
+}
+
+fn str_range(parent: &str, sub: &str) -> std::ops::Range<usize> {
+    let beg = sub.as_ptr() as usize - parent.as_ptr() as usize;
+    let end = beg + sub.len();
+    beg..end
 }

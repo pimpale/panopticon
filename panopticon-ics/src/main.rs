@@ -205,8 +205,10 @@ impl eframe::App for MyApp {
                 ui.horizontal(|ui| {
                     ui.label("Current Task: ");
 
-                    let task_entrybox = egui::TextEdit::singleline(&mut snapshot.classification)
-                        .hint_text(&hint_text);
+                    let task_entrybox =
+                        AutocompleteTextWidget::new(&mut snapshot.classification, |_| {
+                            return vec!["Cool".to_owned(), "Blah".to_owned(), "Nice".to_owned()];
+                        });
                     let response = ui.add(task_entrybox);
 
                     if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
@@ -220,16 +222,10 @@ impl eframe::App for MyApp {
                             // update pointer
                             self.current_time = *next_time;
                             self.scroll_dirty = true;
-                            // regrab focus so we can keep typing
-                            response.request_focus()
+                            response.request_focus();
                         }
                     }
                 });
-
-                let x = AutocompleteTextWidget::new(&mut snapshot.classification, |_| {
-                    return vec!["Cool".to_owned(), "Blah".to_owned(), "Nice".to_owned()];
-                });
-                ui.add(x);
             }
 
             if ui
