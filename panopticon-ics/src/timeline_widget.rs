@@ -86,7 +86,7 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
     }
 
     fn draw_in_viewport(&mut self, ui: &mut egui::Ui, rect: egui::Rect) -> egui::Response {
-        let (response, painter) = ui.allocate_painter(
+        let (mut response, painter) = ui.allocate_painter(
             egui::Vec2 {
                 x: 200.0,
                 y: self.hours_to_pixels(self.last_hour() - self.first_hour()),
@@ -202,6 +202,7 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
                     .min_by_key(|(k, _)| i64::abs(time.timestamp_nanos() - k.timestamp_nanos()))
                 {
                     *self.selected_time = *selected_time;
+                    response.mark_changed();
                 }
             }
         }

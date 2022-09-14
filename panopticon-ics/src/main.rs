@@ -8,7 +8,6 @@ use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
 use sscanf::scanf;
-use std::collections::HashMap;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
 use std::ops::Bound::{Excluded, Included, Unbounded};
@@ -128,7 +127,6 @@ impl MyApp {
     }
 
     fn on_new_snapshot(&mut self) {
-        self.scroll_dirty = true;
         // the hint text is the previous snapshot classification
         self.hint_text = self
             .snapshots
@@ -137,7 +135,7 @@ impl MyApp {
             .map(|(_, v)| v.classification.clone())
             .unwrap_or(String::new());
         // the shortcut codes are the most common in the 500 previous
-        let mut popular_classifications = HashMap::new();
+        let mut popular_classifications = BTreeMap::new();
         for (_, v) in self.snapshots.range((
             Included(self.current_time - chrono::Duration::hours(4)),
             Excluded(self.current_time),
@@ -151,10 +149,10 @@ impl MyApp {
         }
 
         let mut popular_classifications_vec: Vec<_> = popular_classifications.into_iter().collect();
-        popular_classifications_vec.sort_by_key(|(_, v)| *v);
+        popular_classifications_vec.sort_by_cached_key(|(_, v)| -*v);
+        popular_classifications_vec.truncate(10);
         self.currently_visible_shortcuts = popular_classifications_vec
             .into_iter()
-            .rev()
             .map(|(k, _)| k)
             .collect();
     }
@@ -193,7 +191,7 @@ impl eframe::App for MyApp {
                     self.scroll_dirty = true;
                 }
 
-                ui.add(TimelineWidget::new(
+                let timeline_resp = ui.add(TimelineWidget::new(
                     self.zoom_multipler,
                     &mut self.current_time,
                     self.scroll_dirty,
@@ -217,6 +215,9 @@ impl eframe::App for MyApp {
                     }),
                 ));
                 self.scroll_dirty = false;
+                if timeline_resp.changed {
+                    self.on_new_snapshot();
+                }
             });
 
         egui::TopBottomPanel::top("Controls").show(ctx, |ui| {
@@ -297,7 +298,7 @@ impl eframe::App for MyApp {
                         }
                     }
                     Err(error) => {
-                        ui.colored_label(egui::Color32::RED, error);
+                        ui.colored_label(egui::Color32::RED, egui::RichText::new(error).small());
                     }
                 }
             }
@@ -310,6 +311,7 @@ impl eframe::App for MyApp {
                     ui.horizontal_wrapped(|ui| {
                         for (i, x) in self.currently_visible_shortcuts.iter().enumerate() {
                             ui.label(format!("\\{}: {}", i, x));
+                            ui.add_space(10.0);
                         }
                     });
                 });
