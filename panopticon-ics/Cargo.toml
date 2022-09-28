@@ -10,6 +10,6 @@ chrono = "0.4.22"
 clap = { version = "3.2.22", features = ["derive"] }
 eframe = "0.19.0"
 egui_extras = { version = "0.19.0", features = ["image"] }
-image = { version = "0.24.3", features = ["png", "farbfeld"] }
-ics = "0.5.7"
+image = { version = "0.24.4", features = ["png", "farbfeld"] }
+ics = "0.5.8"
 sscanf = "0.3.1"
