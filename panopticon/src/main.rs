@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use clap::{CommandFactory, ErrorKind, Parser};
+use clap::{error::ErrorKind, CommandFactory, Parser};
 use rand::Rng;
 use screenshots::Screen;
 use std::{fs, thread, time};
