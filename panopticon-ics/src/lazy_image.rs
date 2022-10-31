@@ -24,4 +24,8 @@ impl LazyImage {
 
         img.show_max_size(ui, size)
     }
+
+    pub fn clear(&mut self) {
+        self.img = None;
+    }
 }

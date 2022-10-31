@@ -133,7 +133,7 @@ impl MyApp {
             .next_back()
             .map(|(_, v)| v.classification.clone())
             .unwrap_or(String::new());
-        // the shortcut codes are the most common in the 500 previous
+        // the shortcut codes are the most common in the previous 4 hours
         let mut popular_classifications = BTreeMap::new();
         for (_, v) in self.snapshots.range((
             Included(self.current_time - chrono::Duration::hours(4)),
@@ -154,6 +154,27 @@ impl MyApp {
             .into_iter()
             .map(|(k, _)| k)
             .collect();
+
+        // clear all except the nearest 32 on either side
+        for (_, s) in self
+            .snapshots
+            .range_mut((Unbounded, Excluded(self.current_time)))
+            .rev()
+            .skip(32)
+        {
+            for s in s.screenshots.values_mut() {
+                s.clear();
+            }
+        }
+        for (_, s) in self
+            .snapshots
+            .range_mut((Excluded(self.current_time), Unbounded))
+            .skip(32)
+        {
+            for s in s.screenshots.values_mut() {
+                s.clear();
+            }
+        }
     }
 }
 
