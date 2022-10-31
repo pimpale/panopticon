@@ -1,4 +1,3 @@
-#![feature(map_first_last)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 mod lazy_image;
