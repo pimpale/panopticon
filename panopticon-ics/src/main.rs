@@ -85,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
                 snapshots,
             ))
         }),
-    );
+    )?;
 
     return Ok(());
 }
@@ -305,7 +305,7 @@ impl eframe::App for MyApp {
 
                 match user_input_parse_result {
                     Ok(user_input_parse) => {
-                        if response.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+                        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                             snapshot.classification = user_input_parse;
                             // if there's a one after, then grab its focus
                             if let Some((next_time, _)) = iter.next() {
@@ -336,10 +336,7 @@ impl eframe::App for MyApp {
                     });
                 });
 
-            if ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)
-            {
+            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
                 self.current_time = self
                     .snapshots
                     .range((Unbounded, Excluded(self.current_time)))
@@ -349,10 +346,7 @@ impl eframe::App for MyApp {
                 self.scroll_dirty = true;
                 self.on_new_snapshot();
             }
-            if ui
-                .input_mut()
-                .consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)
-            {
+            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
                 self.current_time = self
                     .snapshots
                     .range((Excluded(self.current_time), Unbounded))

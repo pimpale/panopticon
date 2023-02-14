@@ -8,8 +8,8 @@ edition="2021"
 [dependencies]
 chrono = "0.4.23"
 clap = { version = "4.1.4", features = ["derive"] }
-eframe = "0.20.1"
-egui_extras = { version = "0.20.0", features = ["image"] }
+eframe = "0.21.2"
+egui_extras = { version = "0.21.0", features = ["image"] }
 image = { version = "0.24.5", features = ["png", "farbfeld"] }
 ics = "0.5.8"
 sscanf = "0.4.0"
