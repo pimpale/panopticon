@@ -7,7 +7,7 @@ edition="2021"
 
 [dependencies]
 chrono = "0.4.24"
-clap = { version = "4.2.4", features = ["derive"] }
+clap = { version = "4.2.7", features = ["derive"] }
 eframe = "0.21.3"
 egui_extras = { version = "0.21.0", features = ["image"] }
 image = { version = "0.24.6", features = ["png", "farbfeld"] }
