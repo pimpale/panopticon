@@ -362,7 +362,7 @@ impl eframe::App for MyApp {
             if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
-                    .always_show_scroll(true)
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for lazy_img in snapshot.screenshots.values_mut() {
