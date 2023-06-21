@@ -31,7 +31,7 @@ fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
     let screens = Screen::all().unwrap();
     for screen in screens {
         let image = screen.capture().unwrap();
-        let buffer = image.buffer();
+        let buffer = image.to_png().unwrap();
         let dir = format!("{}/{}", base_dir, time.format("%Y-%m-%d"));
         fs::create_dir_all(&dir).unwrap();
         fs::write(
