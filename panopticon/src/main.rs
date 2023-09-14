@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use clap::{error::ErrorKind, CommandFactory, Parser};
 use rand::Rng;
-use screenshots::{Screen, Compression};
+use screenshots::Screen;
 use std::{fs, thread, time};
 use user_idle::UserIdle;
 
@@ -31,10 +31,9 @@ fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
     let screens = Screen::all().unwrap();
     for screen in screens {
         let image = screen.capture().unwrap();
-        let buffer = image.to_png(Some(Compression::Best)).unwrap();
         let dir = format!("{}/{}", base_dir, time.format("%Y-%m-%d"));
         fs::create_dir_all(&dir).unwrap();
-        fs::write(
+        image.save(
             format!(
                 "{}/{}{}{}.png",
                 dir,
@@ -42,7 +41,6 @@ fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
                 format!("_screen-{}", screen.display_info.id),
                 if afk { "_AFK" } else { "" }
             ),
-            &buffer,
         )
         .unwrap();
     }
