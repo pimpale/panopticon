@@ -199,7 +199,7 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
                 if let Some((selected_time, _)) = self
                     .markers
                     .range((time - permissible_error)..=(time + permissible_error))
-                    .min_by_key(|(k, _)| i64::abs(time.timestamp_nanos() - k.timestamp_nanos()))
+                    .min_by_key(|(&k, _)| (time - k).abs())
                 {
                     *self.selected_time = *selected_time;
                     response.mark_changed();
