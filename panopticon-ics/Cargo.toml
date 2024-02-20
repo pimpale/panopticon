@@ -6,10 +6,10 @@ edition="2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chrono = "0.4.31"
-clap = { version = "4.4.11", features = ["derive"] }
+chrono = "0.4.34"
+clap = { version = "4.5.1", features = ["derive"] }
 eframe = "0.24.1"
 egui_extras = { version = "0.24.2", features = ["image"] }
-image = { version = "0.24.7", features = ["png", "farbfeld"] }
+image = { version = "0.24.8", features = ["png", "farbfeld"] }
 ics = "0.5.8"
 sscanf = "0.4.1"
