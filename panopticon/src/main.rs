@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use clap::{error::ErrorKind, CommandFactory, Parser};
 use rand::Rng;
-use screenshots::Monitor;
+use xcap::Monitor;
 use std::{fs, thread, time};
 use user_idle::UserIdle;
 

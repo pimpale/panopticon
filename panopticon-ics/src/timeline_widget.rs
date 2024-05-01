@@ -173,6 +173,7 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
                             y: time_mark_region.top() + y_offset - galley.rect.height(),
                         },
                         galley,
+                        marker_data.stroke.color
                     );
                 }
 
