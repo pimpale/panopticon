@@ -76,18 +76,18 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
         "panopticon-ics",
         eframe::NativeOptions::default(),
         Box::new(|_| {
-            Box::new(MyApp::new(
+            Ok(Box::new(MyApp::new(
                 // get the earliest time listed or now
                 snapshots
                     .first_key_value()
-                    .map(|x| x.0.clone())
+                    .map(|x| *x.0)
                     .unwrap_or(Local::now()),
                 snapshots,
-            ))
+            )))
         }),
     )?;
 
-    return Ok(());
+    Ok(())
 }
 
 struct Snapshot {
@@ -132,7 +132,7 @@ impl MyApp {
             .range((Unbounded, Excluded(self.current_time)))
             .next_back()
             .map(|(_, v)| v.classification.clone())
-            .unwrap_or(String::new());
+            .unwrap_or_default();
         // the shortcut codes are the most common in the previous 4 hours
         let mut popular_classifications = BTreeMap::new();
         for (_, v) in self.snapshots.range((
@@ -268,14 +268,14 @@ impl eframe::App for MyApp {
                         let task_entrybox =
                             egui::TextEdit::singleline(&mut snapshot.classification)
                                 .hint_text(&self.hint_text);
-                        return ui.add(task_entrybox);
+                        ui.add(task_entrybox)
                     })
                     .inner;
 
                 let user_input_parse = |classification: &String| {
                     // if was empty, then accept hint
                     if classification.is_empty() {
-                        return Ok(self.hint_text.clone());
+                        Ok(self.hint_text.clone())
                     } else {
                         let mut chars = classification.chars();
                         if chars.next() == Some('\\') {
@@ -283,20 +283,15 @@ impl eframe::App for MyApp {
                             match rest.parse::<usize>() {
                                 Ok(n) => {
                                     if n < self.currently_visible_shortcuts.len() {
-                                        return Ok(self.currently_visible_shortcuts[n].clone());
+                                        Ok(self.currently_visible_shortcuts[n].clone())
                                     } else {
-                                        return Err(format!("Invalid shortcut number: {}", n));
+                                        Err(format!("Invalid shortcut number: {}", n))
                                     }
                                 }
-                                Err(e) => {
-                                    return Err(format!(
-                                        "Couldn't parse shortcut code: {}",
-                                        e.to_string()
-                                    ));
-                                }
+                                Err(e) => Err(format!("Couldn't parse shortcut code: {}", e)),
                             }
                         } else {
-                            return Ok(classification.clone());
+                            Ok(classification.clone())
                         }
                     }
                 };
@@ -341,7 +336,7 @@ impl eframe::App for MyApp {
                     .snapshots
                     .range((Unbounded, Excluded(self.current_time)))
                     .next_back()
-                    .map(|(x, _)| x.clone())
+                    .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
                 self.on_new_snapshot();
@@ -351,7 +346,7 @@ impl eframe::App for MyApp {
                     .snapshots
                     .range((Excluded(self.current_time), Unbounded))
                     .next()
-                    .map(|(x, _)| x.clone())
+                    .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
                 self.on_new_snapshot();
