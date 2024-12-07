@@ -7,9 +7,9 @@ edition="2021"
 
 [dependencies]
 chrono = "0.4.38"
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive"] }
 eframe = "0.29.1"
 egui_extras = { version = "0.29.1", features = ["image"] }
-image = { version = "0.25.4", features = ["png"] }
+image = { version = "0.25.5", features = ["png"] }
 ics = "0.5.8"
 sscanf = "0.4.2"
