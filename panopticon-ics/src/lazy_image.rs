@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub struct LazyImage {
     path: PathBuf,
-    img: Option<egui_extras::RetainedImage>,
+    img: Option<Result<egui_extras::RetainedImage, String>>,
 }
 
 impl LazyImage {
@@ -19,10 +19,14 @@ impl LazyImage {
                 self.path.to_string_lossy(),
                 &fs::read(&self.path).unwrap(),
             )
-            .unwrap()
         });
 
-        img.show_max_size(ui, size)
+        match img {
+            Ok(img) => img.show_max_size(ui, size),
+            Err(err) => {
+                ui.label(err.clone())
+            }
+        }
     }
 
     pub fn clear(&mut self) {

@@ -130,7 +130,7 @@ impl<'a, 'b> TimelineWidget<'a, 'b> {
                         time_mark_region.top() + y_offset + 2.0,
                     ),
                     egui::Align2::LEFT_TOP,
-                    current_time.format("%m/%d %H:%M:%S"),
+                    current_time.format("%a, %m/%d\n%H:%M:%S"),
                     egui::TextStyle::Small.resolve(ui.style()),
                     widget_visuals.text_color(),
                 );

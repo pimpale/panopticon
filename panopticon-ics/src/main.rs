@@ -248,7 +248,7 @@ impl eframe::App for MyApp {
             if let Some((time, snapshot)) = iter.next() {
                 // put other flags here
                 ui.horizontal_wrapped(|ui| {
-                    ui.heading(time.format("%Y-%m-%d %H:%M:%S").to_string());
+                    ui.heading(time.format("%Y-%m-%d %a %H:%M:%S").to_string());
                     ui.add_space(20.0);
                     if snapshot.afk {
                         ui.label(
