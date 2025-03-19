@@ -235,7 +235,7 @@ impl eframe::App for MyApp {
                     }),
                 ));
                 self.scroll_dirty = false;
-                if timeline_resp.changed {
+                if timeline_resp.changed() {
                     self.on_new_snapshot();
                 }
             });

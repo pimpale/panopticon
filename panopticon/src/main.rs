@@ -38,7 +38,7 @@ fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
                 "{}/{}{}{}.png",
                 dir,
                 time.format("%H:%M:%S"),
-                format!("_screen-{}", monitor.id()),
+                format!("_screen-{}", monitor.id().unwrap()),
                 if afk { "_AFK" } else { "" }
             ))
             .unwrap();
@@ -69,10 +69,10 @@ fn main() {
         .exit();
     }
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     loop {
-        let delay = jitter * rng.r#gen::<f32>();
+        let delay = jitter * rng.random::<f32>();
         thread::sleep(time::Duration::from_secs_f32(delay));
 
         let afk = if no_afk {
