@@ -1,35 +1,25 @@
 use eframe::egui;
-use std::fs;
 use std::path::PathBuf;
 
 pub struct LazyImage {
-    path: PathBuf,
-    img: Option<Result<egui_extras::RetainedImage, String>>,
+    uri: String,
 }
 
 impl LazyImage {
     pub fn new(path: PathBuf) -> LazyImage {
-        LazyImage { path, img: None }
-    }
-
-    pub fn show_max_size(&mut self, ui: &mut egui::Ui, size: egui::epaint::Vec2) -> egui::Response {
-        let img = self.img.get_or_insert_with(|| {
-            // Load the texture only once.
-            egui_extras::RetainedImage::from_image_bytes(
-                self.path.to_string_lossy(),
-                &fs::read(&self.path).unwrap(),
-            )
-        });
-
-        match img {
-            Ok(img) => img.show_max_size(ui, size),
-            Err(err) => {
-                ui.label(err.clone())
-            }
+        // The `file://` loader (egui_extras "file" feature) reads and caches the
+        // image lazily on first display.
+        LazyImage {
+            uri: format!("file://{}", path.to_string_lossy()),
         }
     }
 
-    pub fn clear(&mut self) {
-        self.img = None;
+    pub fn show_max_size(&mut self, ui: &mut egui::Ui, size: egui::Vec2) -> egui::Response {
+        ui.add(egui::Image::from_uri(self.uri.clone()).max_size(size))
+    }
+
+    pub fn clear(&mut self, ctx: &egui::Context) {
+        // Drop the cached texture/bytes so far-away snapshots don't accumulate.
+        ctx.forget_image(&self.uri);
     }
 }

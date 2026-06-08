@@ -6,7 +6,7 @@ mod timeline_widget;
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, TimeZone};
 use clap::Parser;
 use eframe::egui;
-use sscanf::scanf;
+use sscanf::sscanf;
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
 use std::ops::Bound::{Excluded, Included, Unbounded};
@@ -37,8 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
         for maybe_snapshot_path in fs::read_dir(day_path.path())? {
             let snapshot_path = maybe_snapshot_path?;
             let input_data = snapshot_path.file_name().to_string_lossy().to_string();
-            let (hms, screen, afk_str) =
-                scanf!(input_data, "{}_screen-{}{}", str, u64, str).map_err(|e| e.to_string())?;
+            let (hms, screen, afk_str) = sscanf!(input_data, "{}_screen-{}{}", str, u64, str)
+                .ok_or_else(|| format!("could not parse snapshot filename: {input_data}"))?;
 
             let afk = afk_str == "_AFK.png";
 
@@ -75,7 +75,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     eframe::run_native(
         "panopticon-ics",
         eframe::NativeOptions::default(),
-        Box::new(|_| {
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(MyApp::new(
                 // get the earliest time listed or now
                 snapshots
@@ -125,7 +126,7 @@ impl MyApp {
         }
     }
 
-    fn on_new_snapshot(&mut self) {
+    fn on_new_snapshot(&mut self, ctx: &egui::Context) {
         // the hint text is the previous snapshot classification
         self.hint_text = self
             .snapshots
@@ -163,7 +164,7 @@ impl MyApp {
             .skip(32)
         {
             for s in s.screenshots.values_mut() {
-                s.clear();
+                s.clear(ctx);
             }
         }
         for (_, s) in self
@@ -172,17 +173,17 @@ impl MyApp {
             .skip(32)
         {
             for s in s.screenshots.values_mut() {
-                s.clear();
+                s.clear(ctx);
             }
         }
     }
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("Calendar")
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        egui::Panel::left("Calendar")
             .resizable(false)
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 ui.heading("Panopticon ICS");
 
                 ui.collapsing("Controls", |ui| {
@@ -236,11 +237,11 @@ impl eframe::App for MyApp {
                 ));
                 self.scroll_dirty = false;
                 if timeline_resp.changed() {
-                    self.on_new_snapshot();
+                    self.on_new_snapshot(ui.ctx());
                 }
             });
 
-        egui::TopBottomPanel::top("Controls").show(ctx, |ui| {
+        egui::Panel::top("Controls").show_inside(ui, |ui| {
             // create iterator to view current snapshot and next
             let mut iter = self.snapshots.range_mut(self.current_time..);
 
@@ -307,7 +308,7 @@ impl eframe::App for MyApp {
                                 // update pointer
                                 self.current_time = *next_time;
                                 self.scroll_dirty = true;
-                                self.on_new_snapshot();
+                                self.on_new_snapshot(ui.ctx());
                                 response.request_focus();
                             }
                         }
@@ -339,7 +340,7 @@ impl eframe::App for MyApp {
                     .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
-                self.on_new_snapshot();
+                self.on_new_snapshot(ui.ctx());
             }
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
                 self.current_time = self
@@ -349,11 +350,11 @@ impl eframe::App for MyApp {
                     .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
-                self.on_new_snapshot();
+                self.on_new_snapshot(ui.ctx());
             }
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()
