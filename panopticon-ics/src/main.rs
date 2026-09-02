@@ -37,10 +37,17 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
         for maybe_snapshot_path in fs::read_dir(day_path.path())? {
             let snapshot_path = maybe_snapshot_path?;
             let input_data = snapshot_path.file_name().to_string_lossy().to_string();
-            let (hms, screen, afk_str) = sscanf!(input_data, "{}_screen-{}{}", str, u64, str)
+            let stem = snapshot_path
+                .path()
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let (stem, afk) = match stem.strip_suffix("_AFK") {
+                Some(stem) => (stem.to_owned(), true),
+                None => (stem, false),
+            };
+            let (hms, screen) = sscanf!(stem, "{}_screen-{}", str, u64)
                 .ok_or_else(|| format!("could not parse snapshot filename: {input_data}"))?;
-
-            let afk = afk_str == "_AFK.png";
 
             // get real time
             let time = match Local
@@ -75,8 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     eframe::run_native(
         "panopticon-ics",
         eframe::NativeOptions::default(),
-        Box::new(|cc| {
-            egui_extras::install_image_loaders(&cc.egui_ctx);
+        Box::new(|_cc| {
             Ok(Box::new(MyApp::new(
                 // get the earliest time listed or now
                 snapshots
@@ -90,6 +96,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
 
     Ok(())
 }
+
+const CACHED_NEIGHBOURS: usize = 8;
 
 struct Snapshot {
     screenshots: BTreeMap<u64, LazyImage>,
@@ -126,7 +134,7 @@ impl MyApp {
         }
     }
 
-    fn on_new_snapshot(&mut self, ctx: &egui::Context) {
+    fn on_new_snapshot(&mut self) {
         // the hint text is the previous snapshot classification
         self.hint_text = self
             .snapshots
@@ -156,24 +164,23 @@ impl MyApp {
             .map(|(k, _)| k)
             .collect();
 
-        // clear all except the nearest 32 on either side
         for (_, s) in self
             .snapshots
             .range_mut((Unbounded, Excluded(self.current_time)))
             .rev()
-            .skip(32)
+            .skip(CACHED_NEIGHBOURS)
         {
             for s in s.screenshots.values_mut() {
-                s.clear(ctx);
+                s.clear();
             }
         }
         for (_, s) in self
             .snapshots
             .range_mut((Excluded(self.current_time), Unbounded))
-            .skip(32)
+            .skip(CACHED_NEIGHBOURS)
         {
             for s in s.screenshots.values_mut() {
-                s.clear(ctx);
+                s.clear();
             }
         }
     }
@@ -183,7 +190,7 @@ impl eframe::App for MyApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::Panel::left("Calendar")
             .resizable(false)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.heading("Panopticon ICS");
 
                 ui.collapsing("Controls", |ui| {
@@ -237,11 +244,11 @@ impl eframe::App for MyApp {
                 ));
                 self.scroll_dirty = false;
                 if timeline_resp.changed() {
-                    self.on_new_snapshot(ui.ctx());
+                    self.on_new_snapshot();
                 }
             });
 
-        egui::Panel::top("Controls").show_inside(ui, |ui| {
+        egui::Panel::top("Controls").show(ui, |ui| {
             // create iterator to view current snapshot and next
             let mut iter = self.snapshots.range_mut(self.current_time..);
 
@@ -308,7 +315,7 @@ impl eframe::App for MyApp {
                                 // update pointer
                                 self.current_time = *next_time;
                                 self.scroll_dirty = true;
-                                self.on_new_snapshot(ui.ctx());
+                                self.on_new_snapshot();
                                 response.request_focus();
                             }
                         }
@@ -340,7 +347,7 @@ impl eframe::App for MyApp {
                     .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
-                self.on_new_snapshot(ui.ctx());
+                self.on_new_snapshot();
             }
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
                 self.current_time = self
@@ -350,11 +357,11 @@ impl eframe::App for MyApp {
                     .map(|(x, _)| *x)
                     .unwrap_or(self.current_time);
                 self.scroll_dirty = true;
-                self.on_new_snapshot(ui.ctx());
+                self.on_new_snapshot();
             }
         });
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             if let Some((_, snapshot)) = self.snapshots.range_mut(self.current_time..).next() {
                 // show a list of the screenshots (expand horizontally to fill, but can take up as much space as needed vertically)
                 egui::ScrollArea::vertical()

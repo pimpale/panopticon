@@ -35,7 +35,7 @@ fn screenshot_all(base_dir: String, time: DateTime<Local>, afk: bool) {
         fs::create_dir_all(&dir).unwrap();
         image
             .save(format!(
-                "{}/{}{}{}.png",
+                "{}/{}{}{}.qoi",
                 dir,
                 time.format("%H:%M:%S"),
                 format!("_screen-{}", monitor.id().unwrap()),

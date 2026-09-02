@@ -1,6 +1,6 @@
 # Panopticon
 
-This command line application takes periodic screenshots of your screen, and saves them in the folder specified.
+This command line application takes periodic screenshots of your screen, and saves them as [QOI](https://qoiformat.org/) images in the folder specified.
 
 ### Platforms
 

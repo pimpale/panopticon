@@ -5,3 +5,7 @@ members = [
     "panopticon",
     "panopticon-ics",
 ]
+
+# Keep dependencies (image decoders in particular) optimized even in dev builds.
+[profile.dev.package."*"]
+opt-level = 3
